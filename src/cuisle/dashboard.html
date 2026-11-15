@@ -20,6 +20,8 @@
     --coral: #ff7a6b;
     --blue: #7cb2ff;
     --gold: #ffd166;
+    --violet: #c49bff;
+    --green: #8ee08a;
     --shadow: 0 12px 40px rgba(0, 0, 0, .25);
   }
   @media (prefers-color-scheme: light) {
@@ -34,6 +36,8 @@
       --coral: #d94f3d;
       --blue: #2f6fe0;
       --gold: #b07d00;
+      --violet: #7a4fd0;
+      --green: #2f8f4e;
       --shadow: 0 8px 28px rgba(11, 34, 48, .08);
     }
   }
@@ -104,6 +108,9 @@
   .muted { color: var(--muted); }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
   .chart-summary { color: var(--muted); font-size: 12px; margin: 0 0 6px; min-height: 18px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+  .legend .item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
   .chart { width: 100%; height: 220px; display: block; }
   .chart text { fill: var(--muted); font-size: 10px; }
   .chart .grid { stroke: var(--line); stroke-width: 1; }
@@ -150,9 +157,10 @@
   <section class="card wide">
     <div class="card-head">
       <h2>History</h2>
-      <label class="control">Series <select id="series-select"></select></label>
+      <label class="control">Chart <select id="series-select"></select></label>
     </div>
     <div id="history-summary" class="chart-summary"></div>
+    <div id="history-legend" class="legend"></div>
     <div id="history-chart" class="empty">Waiting for the daemon…</div>
   </section>
 
@@ -208,7 +216,6 @@
   const NS = "http://www.w3.org/2000/svg";
   const $ = (id) => document.getElementById(id);
   const RANGES = ["1h", "24h", "7d", "30d", "90d", "1y"];
-  const COLORS = { latency: "--accent", throughput: "--coral", host: "--blue", rssi: "--gold" };
 
   function el(tag, attrs = {}, ...children) {
     const node = document.createElement(tag);
@@ -272,19 +279,6 @@
     if (s < 3600) return Math.round(s / 60) + "m ago";
     return Math.round(s / 3600) + "h ago";
   }
-  function formatterFor(metric) {
-    if (metric === "latency_ms") return fmtMs;
-    if (metric === "down_bps" || metric === "up_bps") return fmtBps;
-    if (metric === "cpu_pct" || metric === "mem_pct" || metric === "loss_pct") return (v) => fmtPct(v);
-    if (metric === "rssi_dbm") return (v) => (v === null || v === undefined ? "–" : Number(v).toFixed(0) + " dBm");
-    return (v) => (v === null || v === undefined ? "–" : String(v));
-  }
-  function colorFor(metric) {
-    if (metric === "down_bps" || metric === "up_bps") return cssVar(COLORS.throughput) || "#ff7a6b";
-    if (metric === "cpu_pct" || metric === "mem_pct") return cssVar(COLORS.host) || "#7cb2ff";
-    if (metric === "rssi_dbm") return cssVar(COLORS.rssi) || "#ffd166";
-    return cssVar(COLORS.latency) || "#3be3c4";
-  }
   function formatAxisTime(ts, range) {
     const date = new Date(ts);
     if (range === "1h" || range === "24h") {
@@ -330,10 +324,19 @@
   }
   function empty(text) { return el("div", { class: "empty", text }); }
 
-  function lineChart(points, series, windowRange, range) {
-    const svg = svgEl("svg", { class: "chart", viewBox: "0 0 1000 220", preserveAspectRatio: "none", role: "img", "aria-label": series.label });
-    const values = points.map((p) => Number(p.value)).filter(Number.isFinite);
-    if (values.length === 0) {
+  function multiChart(seriesList, windowRange, range, formatter, title) {
+    const svg = svgEl("svg", { class: "chart", viewBox: "0 0 1000 220", preserveAspectRatio: "none", role: "img", "aria-label": title });
+    const drawable = seriesList.filter((series) => series.points && series.points.length);
+    const all = [];
+    for (const series of drawable) {
+      for (const point of series.points) {
+        for (const key of ["value", "min", "max"]) {
+          const value = Number(point[key]);
+          if (Number.isFinite(value)) all.push(value);
+        }
+      }
+    }
+    if (!all.length) {
       const text = svgEl("text", { x: "12", y: "34" });
       text.textContent = "no numeric data for this range";
       svg.append(text);
@@ -341,64 +344,72 @@
     }
     const W = 1000, H = 220, m = { l: 66, r: 16, t: 18, b: 30 };
     const plotW = W - m.l - m.r, plotH = H - m.t - m.b;
-    const since = windowRange && Number.isFinite(windowRange.since) ? windowRange.since : points[0].ts;
-    const until = windowRange && Number.isFinite(windowRange.until) ? windowRange.until : points[points.length - 1].ts;
-    const x0 = Math.min(since, until), x1 = Math.max(since, until);
-    const xSpan = Math.max(1, x1 - x0);
-    const yValues = [];
-    for (const p of points) {
-      if (Number.isFinite(Number(p.value))) yValues.push(Number(p.value));
-      if (Number.isFinite(Number(p.min))) yValues.push(Number(p.min));
-      if (Number.isFinite(Number(p.max))) yValues.push(Number(p.max));
+    let x0 = windowRange && Number.isFinite(windowRange.since) ? windowRange.since : null;
+    let x1 = windowRange && Number.isFinite(windowRange.until) ? windowRange.until : null;
+    if (x0 === null || x1 === null) {
+      const times = drawable.flatMap((s) => s.points.map((p) => Number(p.ts))).filter(Number.isFinite);
+      x0 = Math.min(...times);
+      x1 = Math.max(...times);
     }
-    let yMin = Math.min(...yValues), yMax = Math.max(...yValues);
-    if (!Number.isFinite(yMin) || !Number.isFinite(yMax)) { yMin = 0; yMax = 1; }
-    if (yMin === yMax) { const pad = Math.abs(yMin) * 0.05 || 1; yMin -= pad; yMax += pad; }
+    if (!Number.isFinite(x0) || !Number.isFinite(x1) || x1 === x0) {
+      x0 = (Number.isFinite(x0) ? x0 : 0) - 1;
+      x1 = (Number.isFinite(x1) ? x1 : 0) + 1;
+    }
+    let yMin = Math.min(...all), yMax = Math.max(...all);
+    if (yMin === yMax) {
+      const pad = Math.abs(yMin) * 0.05 || 1;
+      yMin -= pad;
+      yMax += pad;
+    }
     const yPad = (yMax - yMin) * 0.06;
-    yMin -= yPad; yMax += yPad;
-    const x = (ts) => m.l + ((ts - x0) / xSpan) * plotW;
-    const y = (v) => m.t + ((yMax - v) / (yMax - yMin)) * plotH;
-    const lineColor = colorFor(series.metric);
+    yMin -= yPad;
+    yMax += yPad;
+    const x = (ts) => m.l + ((ts - x0) / (x1 - x0)) * plotW;
+    const y = (value) => m.t + ((yMax - value) / (yMax - yMin)) * plotH;
     const gridColor = cssVar("--line") || "#1b4050";
     const muted = cssVar("--muted") || "#8fb0b8";
-    const fmt = formatterFor(series.metric);
 
     for (let i = 0; i <= 3; i++) {
       const value = yMin + ((yMax - yMin) * i) / 3;
       const yy = y(value);
       svg.append(svgEl("line", { class: "grid", x1: String(m.l), y1: String(yy), x2: String(W - m.r), y2: String(yy), stroke: gridColor }));
       const label = svgEl("text", { x: String(m.l - 6), y: String(yy + 3), "text-anchor": "end", fill: muted });
-      label.textContent = fmt(value);
+      label.textContent = formatter(value);
       svg.append(label);
     }
     for (let i = 0; i <= 2; i++) {
       const ts = x0 + ((x1 - x0) * i) / 2;
-      const xx = x(ts);
-      const label = svgEl("text", { x: String(xx), y: String(H - 8), "text-anchor": i === 0 ? "start" : i === 2 ? "end" : "middle", fill: muted });
+      const label = svgEl("text", { x: String(x(ts)), y: String(H - 8), "text-anchor": i === 0 ? "start" : i === 2 ? "end" : "middle", fill: muted });
       label.textContent = formatAxisTime(ts, range);
       svg.append(label);
     }
 
-    const band = points.filter((p) => Number.isFinite(Number(p.min)) && Number.isFinite(Number(p.max)));
-    if (band.length > 1 && band.some((p) => Number(p.max) !== Number(p.min))) {
-      const top = band.map((p) => `${x(p.ts).toFixed(1)},${y(Number(p.max)).toFixed(1)}`);
-      const bottom = band.slice().reverse().map((p) => `${x(p.ts).toFixed(1)},${y(Number(p.min)).toFixed(1)}`);
-      svg.append(svgEl("path", {
-        class: "band",
-        d: `M${top[0]} L${top.slice(1).join(" L")} L${bottom.join(" L")} Z`,
-        fill: lineColor,
+    for (const series of drawable) {
+      const color = series.color || paletteColor(0);
+      const points = series.points.filter((point) => Number.isFinite(Number(point.value)));
+      if (!points.length) continue;
+      if (drawable.length === 1) {
+        const band = series.points.filter((point) => Number.isFinite(Number(point.min)) && Number.isFinite(Number(point.max)));
+        if (band.length > 1 && band.some((point) => Number(point.max) !== Number(point.min))) {
+          const top = band.map((point) => `${x(point.ts).toFixed(1)},${y(Number(point.max)).toFixed(1)}`);
+          const bottom = band.slice().reverse().map((point) => `${x(point.ts).toFixed(1)},${y(Number(point.min)).toFixed(1)}`);
+          svg.append(svgEl("path", {
+            class: "band",
+            d: `M${top[0]} L${top.slice(1).join(" L")} L${bottom.join(" L")} Z`,
+            fill: color,
+          }));
+        }
+      }
+      const coords = points.map((point) => `${x(point.ts).toFixed(1)},${y(Number(point.value)).toFixed(1)}`);
+      svg.append(svgEl("polyline", {
+        class: "line",
+        points: coords.join(" "),
+        stroke: color,
+        "vector-effect": "non-scaling-stroke",
       }));
-    }
-
-    const coords = points.map((p) => `${x(p.ts).toFixed(1)},${y(Number(p.value)).toFixed(1)}`);
-    svg.append(svgEl("polyline", {
-      class: "line",
-      points: coords.join(" "),
-      stroke: lineColor,
-      "vector-effect": "non-scaling-stroke",
-    }));
-    if (points.length === 1) {
-      svg.append(svgEl("circle", { cx: String(x(points[0].ts)), cy: String(y(Number(points[0].value))), r: "3", fill: lineColor }));
+      if (points.length === 1) {
+        svg.append(svgEl("circle", { cx: String(x(points[0].ts)), cy: String(y(Number(points[0].value))), r: "3", fill: color }));
+      }
     }
     return svg;
   }
@@ -406,108 +417,144 @@
   // -- state --------------------------------------------------------------
 
   const urlRange = new URLSearchParams(location.search).get("range");
+  const urlChart = new URLSearchParams(location.search).get("chart");
   const storedRange = readState("cuisle.range", "24h");
   const initialRange = RANGES.includes(urlRange || "") ? urlRange : storedRange;
   const state = {
     range: RANGES.includes(initialRange) ? initialRange : "24h",
-    seriesKey: readState("cuisle.series", ""),
-    series: null,
+    groupKey: readState("cuisle.chart", ""),
+    group: null,
+    groups: {},
     config: null,
-    seriesData: null,
-    lastSeriesFetch: 0,
+    groupData: null,
+    lastGroupFetch: 0,
   };
 
-  function specValue(spec) {
-    const clean = {};
-    for (const [k, v] of Object.entries(spec)) if (v !== null && v !== undefined && v !== "") clean[k] = v;
-    return JSON.stringify(clean);
+  const PALETTE = ["--accent", "--coral", "--blue", "--gold", "--violet", "--green"];
+  const PALETTE_FALLBACK = ["#3be3c4", "#ff7a6b", "#7cb2ff", "#ffd166", "#c49bff", "#8ee08a"];
+
+  function paletteColor(index) {
+    return cssVar(PALETTE[index % PALETTE.length]) || PALETTE_FALLBACK[index % PALETTE_FALLBACK.length];
   }
 
-  function addOption(group, label, spec) {
-    const option = el("option", { value: specValue(spec), text: label });
-    option._spec = { ...spec, label };
-    group.append(option);
-    return option;
+  function downColor() { return cssVar("--coral") || "#ff7a6b"; }
+  function upColor() { return cssVar("--blue") || "#7cb2ff"; }
+
+  function addGroup(key, label, category, members, formatter) {
+    const colored = members.map((member, index) => ({
+      ...member,
+      color: member.color || paletteColor(index),
+    }));
+    state.groups[key] = { key, label, category, members: colored, formatter };
+    return state.groups[key];
   }
 
-  function buildSeriesOptions() {
+  function buildChartOptions() {
     const select = $("series-select");
     clear(select);
+    state.groups = {};
     const config = state.config;
-    const latency = el("optgroup", { label: "Latency" });
-    const throughput = el("optgroup", { label: "Throughput" });
-    const host = el("optgroup", { label: "Host" });
-
     const anchors = config && Array.isArray(config.anchors) ? config.anchors : [
       { name: "gateway", scope: "lan", health: ["icmp"], backend: "http" },
-      { name: "networkquality", scope: "capacity", health: [], backend: "networkquality" },
     ];
-    for (const anchor of anchors) {
-      for (const method of anchor.health || []) {
-        addOption(latency, `${anchor.scope} · ${anchor.name} · ${method}`, {
-          metric: "latency_ms", scope: anchor.scope, anchor: anchor.name, method,
-        });
+
+    const health = el("optgroup", { label: "Health" });
+    for (const scope of ["lan", "country", "europe", "international"]) {
+      const members = [];
+      for (const anchor of anchors) {
+        if (anchor.scope !== scope) continue;
+        for (const method of anchor.health || []) {
+          members.push({
+            label: `${anchor.name} · ${method}`,
+            metric: "latency_ms",
+            scope,
+            anchor: anchor.name,
+            method,
+          });
+        }
+      }
+      if (members.length) {
+        const key = `health:${scope}`;
+        addGroup(key, `Health · ${scope}`, "Health", members, fmtMs);
+        health.append(el("option", {
+          value: key,
+          text: scope.charAt(0).toUpperCase() + scope.slice(1),
+        }));
       }
     }
-    addOption(throughput, "capacity · networkQuality · download", {
-      metric: "down_bps", scope: "capacity", anchor: "networkquality", method: "networkquality",
-    });
-    addOption(throughput, "capacity · networkQuality · upload", {
-      metric: "up_bps", scope: "capacity", anchor: "networkquality", method: "networkquality",
-    });
+
+    const capacity = el("optgroup", { label: "Capacity" });
+    addGroup("capacity:networkquality", "Capacity · networkQuality", "Capacity", [
+      { label: "download", metric: "down_bps", scope: "capacity", anchor: "networkquality", method: "networkquality", color: downColor() },
+      { label: "upload", metric: "up_bps", scope: "capacity", anchor: "networkquality", method: "networkquality", color: upColor() },
+    ], fmtBps);
+    capacity.append(el("option", {
+      value: "capacity:networkquality",
+      text: "networkQuality (download + upload)",
+    }));
+
     for (const anchor of anchors) {
       const backend = anchor.backend || "http";
+      const members = [];
       if (backend === "http") {
-        if (anchor.download_url) addOption(throughput, `${anchor.scope} · ${anchor.name} · download`, {
-          metric: "down_bps", scope: anchor.scope, anchor: anchor.name, method: backend,
-        });
-        if (anchor.upload_url) addOption(throughput, `${anchor.scope} · ${anchor.name} · upload`, {
-          metric: "up_bps", scope: anchor.scope, anchor: anchor.name, method: backend,
-        });
+        if (anchor.download_url) {
+          members.push({ label: "download", metric: "down_bps", scope: anchor.scope, anchor: anchor.name, method: backend, color: downColor() });
+        }
+        if (anchor.upload_url) {
+          members.push({ label: "upload", metric: "up_bps", scope: anchor.scope, anchor: anchor.name, method: backend, color: upColor() });
+        }
       } else if (backend === "speedtest") {
-        addOption(throughput, `${anchor.scope} · ${anchor.name} · download`, {
-          metric: "down_bps", scope: anchor.scope, anchor: anchor.name, method: backend,
-        });
-        addOption(throughput, `${anchor.scope} · ${anchor.name} · upload`, {
-          metric: "up_bps", scope: anchor.scope, anchor: anchor.name, method: backend,
-        });
+        members.push({ label: "download", metric: "down_bps", scope: anchor.scope, anchor: anchor.name, method: backend, color: downColor() });
+        members.push({ label: "upload", metric: "up_bps", scope: anchor.scope, anchor: anchor.name, method: backend, color: upColor() });
       } else if (backend === "iperf3") {
-        if (anchor.direction === "up" || anchor.direction === "both") addOption(throughput, `${anchor.scope} · ${anchor.name} · upload`, {
-          metric: "up_bps", scope: anchor.scope, anchor: anchor.name, method: backend,
-        });
-        if (anchor.direction === "down" || anchor.direction === "both") addOption(throughput, `${anchor.scope} · ${anchor.name} · download`, {
-          metric: "down_bps", scope: anchor.scope, anchor: anchor.name, method: backend,
-        });
+        if (anchor.direction === "up" || anchor.direction === "both") {
+          members.push({ label: "upload", metric: "up_bps", scope: anchor.scope, anchor: anchor.name, method: backend, color: upColor() });
+        }
+        if (anchor.direction === "down" || anchor.direction === "both") {
+          members.push({ label: "download", metric: "down_bps", scope: anchor.scope, anchor: anchor.name, method: backend, color: downColor() });
+        }
+      }
+      if (members.length) {
+        const key = `capacity:${anchor.name}`;
+        addGroup(key, `Capacity · ${anchor.name}`, "Capacity", members, fmtBps);
+        capacity.append(el("option", {
+          value: key,
+          text: `${anchor.name} (${members.map((member) => member.label).join(" + ")})`,
+        }));
       }
     }
-    addOption(host, "CPU %", { metric: "cpu_pct" });
-    addOption(host, "Memory %", { metric: "mem_pct" });
 
-    select.append(latency, throughput, host);
+    const host = el("optgroup", { label: "Host" });
+    addGroup("host", "Host · CPU and memory", "Host", [
+      { label: "CPU %", metric: "cpu_pct", color: cssVar("--accent") || "#3be3c4" },
+      { label: "Memory %", metric: "mem_pct", color: cssVar("--blue") || "#7cb2ff" },
+    ], (value) => fmtPct(value));
+    host.append(el("option", { value: "host", text: "CPU + memory" }));
+
+    select.append(health, capacity, host);
+    const keys = Object.keys(state.groups);
     let selected = null;
-    for (const option of select.options) {
-      if (option.value === state.seriesKey) { selected = option; break; }
-    }
+    if (urlChart && state.groups[urlChart]) selected = urlChart;
+    if (!selected && state.groups[state.groupKey]) selected = state.groupKey;
     if (!selected) {
-      selected = Array.from(select.options).find((o) => o._spec && o._spec.method === "icmp" && o._spec.scope === "lan")
-        || Array.from(select.options).find((o) => o._spec && o._spec.metric === "down_bps" && o._spec.anchor === "networkquality")
-        || select.options[0];
+      selected = ["health:lan", "health:country", "capacity:networkquality", keys[0]].find((key) => state.groups[key]) || null;
     }
     if (selected) {
-      select.value = selected.value;
-      state.seriesKey = selected.value;
-      state.series = selected._spec;
-      writeState("cuisle.series", state.seriesKey);
+      select.value = selected;
+      state.groupKey = selected;
+      state.group = state.groups[selected];
+      writeState("cuisle.chart", selected);
     }
     select.addEventListener("change", () => {
-      const option = select.options[select.selectedIndex];
-      if (!option || !option._spec) return;
-      state.seriesKey = option.value;
-      state.series = option._spec;
-      writeState("cuisle.series", state.seriesKey);
+      const key = select.value;
+      if (!state.groups[key]) return;
+      state.groupKey = key;
+      state.group = state.groups[key];
+      writeState("cuisle.chart", key);
       refresh(true);
     });
   }
+
 
   function buildRangeOptions() {
     const select = $("range-select");
@@ -661,25 +708,55 @@
     ));
   }
 
-  function renderHistory(data, series) {
+  function seriesStats(points) {
+    const values = points.map((point) => Number(point.value)).filter(Number.isFinite);
+    if (!values.length) return null;
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+    const min = Math.min(...points.map((point) => Number(point.min ?? point.value)).filter(Number.isFinite));
+    const max = Math.max(...points.map((point) => Number(point.max ?? point.value)).filter(Number.isFinite));
+    return { last: values[values.length - 1], avg, min, max, count: points.length };
+  }
+
+  function renderLegend(data, formatter) {
+    const node = $("history-legend");
+    clear(node);
+    for (const series of data.series) {
+      const stats = seriesStats(series.points || []);
+      const item = el("span", { class: "item" });
+      item.append(el("i", { class: "swatch", style: `background:${series.color || paletteColor(0)}` }));
+      item.append(el("span", { text: series.label }));
+      if (stats) {
+        item.append(el("span", { class: "muted", text: `${formatter(stats.last)} · avg ${formatter(stats.avg)}` }));
+        item.title = `${series.label}: last ${formatter(stats.last)} · avg ${formatter(stats.avg)} · min ${formatter(stats.min)} · max ${formatter(stats.max)} · ${stats.count} buckets`;
+      } else {
+        item.append(el("span", { class: "muted", text: "no data" }));
+        if (series.error) item.title = series.error;
+      }
+      node.append(item);
+    }
+  }
+
+  function renderGroup(data) {
     const summary = $("history-summary");
     const node = $("history-chart");
+    const legend = $("history-legend");
     clear(node);
-    if (!data || !data.points || !data.points.length) {
-      summary.textContent = data ? `No data for this range · ${data.resolution}` : "";
+    clear(legend);
+    const group = state.group;
+    if (!group) {
+      summary.textContent = "No chart group selected.";
+      node.append(empty("No chart group selected."));
+      return;
+    }
+    if (!data || !data.series || !data.series.length) {
+      summary.textContent = `${group.label} · no data for ${state.range}`;
       node.append(empty("No data for this range."));
       return;
     }
-    const points = data.points;
-    const fmt = formatterFor(series.metric);
-    const label = series.label || series.metric;
-    const values = points.map((p) => Number(p.value)).filter(Number.isFinite);
-    const avg = values.reduce((a, b) => a + b, 0) / values.length;
-    const min = Math.min(...points.map((p) => Number(p.min ?? p.value)).filter(Number.isFinite));
-    const max = Math.max(...points.map((p) => Number(p.max ?? p.value)).filter(Number.isFinite));
-    const bucketWord = points.length === 1 ? "bucket" : "buckets";
-    summary.textContent = `${label} · ${data.resolution} · last ${fmt(values[values.length - 1])} · avg ${fmt(avg)} · min ${fmt(min)} · max ${fmt(max)} · ${points.length} ${bucketWord}`;
-    node.append(lineChart(points, series, data.window, state.range));
+    const resolutions = [...new Set(data.series.map((series) => series.resolution).filter(Boolean))];
+    summary.textContent = `${group.label} · ${state.range} · ${resolutions.join("/") || "no data"} · ${data.series.length} series`;
+    renderLegend(data, group.formatter);
+    node.append(multiChart(data.series, data.window, state.range, group.formatter, group.label));
   }
 
   // -- data ---------------------------------------------------------------
@@ -703,22 +780,44 @@
     return `/api/series?${params.toString()}`;
   }
 
+  async function fetchGroup(group) {
+    const results = await Promise.allSettled(group.members.map((member) => api(seriesUrl(member))));
+    const series = [];
+    let windowRange = null;
+    results.forEach((result, index) => {
+      const member = group.members[index];
+      if (result.status === "fulfilled") {
+        const value = result.value;
+        series.push({
+          ...member,
+          points: value.points || [],
+          resolution: value.resolution,
+          window: value.window,
+        });
+        if (!windowRange && value.window) windowRange = value.window;
+      } else {
+        series.push({ ...member, points: [], resolution: null, error: result.reason.message });
+      }
+    });
+    return { series, window: windowRange, group };
+  }
+
   let timer = null;
   let busy = false;
   let pendingForce = false;
 
-  async function refresh(forceSeries = false) {
-    if (busy) { pendingForce = pendingForce || forceSeries; return; }
+  async function refresh(forceGroup = false) {
+    if (busy) { pendingForce = pendingForce || forceGroup; return; }
     busy = true;
     clearTimeout(timer);
-    const wantSeries = forceSeries || !state.seriesData || Date.now() - state.lastSeriesFetch > 30000;
-    const seriesPromise = state.series
-      ? (wantSeries ? api(seriesUrl(state.series)) : Promise.resolve(state.seriesData))
+    const wantGroup = forceGroup || !state.groupData || Date.now() - state.lastGroupFetch > 30000;
+    const groupPromise = state.group
+      ? (wantGroup ? fetchGroup(state.group) : Promise.resolve(state.groupData))
       : Promise.resolve(null);
-    const [statusResult, eventsResult, seriesResult] = await Promise.allSettled([
+    const [statusResult, eventsResult, groupResult] = await Promise.allSettled([
       api("/api/status"),
       api(`/api/events?since=${encodeURIComponent(state.range)}&limit=200`),
-      seriesPromise,
+      groupPromise,
     ]);
     if (statusResult.status === "fulfilled") {
       renderStatus(statusResult.value);
@@ -738,17 +837,18 @@
       clear(node);
       node.append(empty(eventsResult.reason.message));
     }
-    if (seriesResult.status === "fulfilled" && seriesResult.value) {
-      if (wantSeries) {
-        state.seriesData = seriesResult.value;
-        state.lastSeriesFetch = Date.now();
+    if (groupResult.status === "fulfilled" && groupResult.value) {
+      if (wantGroup) {
+        state.groupData = groupResult.value;
+        state.lastGroupFetch = Date.now();
       }
-      renderHistory(seriesResult.value, state.series);
-    } else if (seriesResult.status === "rejected") {
+      renderGroup(groupResult.value);
+    } else if (groupResult.status === "rejected") {
       const node = $("history-chart");
       clear(node);
-      node.append(empty(seriesResult.reason.message));
+      node.append(empty(groupResult.reason.message));
       $("history-summary").textContent = "";
+      clear($("history-legend"));
     }
     busy = false;
     const nextForce = pendingForce;
@@ -763,7 +863,7 @@
     } catch {
       state.config = null;
     }
-    buildSeriesOptions();
+    buildChartOptions();
     await refresh(true);
   }
 

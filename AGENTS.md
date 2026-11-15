@@ -25,9 +25,9 @@ Working and exercised on this Mac:
   `networkQuality` JSON parsing.
 - The daemon loop, the loopback dashboard, the HTML report and `install.sh`.
 - SQLite WAL storage, rollups, retention and the icon pipeline.
-- The dashboard range/series selector and `cuisle history` read raw, 5-minute
-  and hourly rollups for windows from 1 hour to 1 year; both were exercised
-  against live rollups.
+- The dashboard range and chart-group selectors, and `cuisle history`, read raw,
+  5-minute and hourly rollups for windows from 1 hour to 1 year; both were
+  exercised against live rollups.
 
 Known gaps, stated so they are not mistaken for working features:
 
@@ -113,7 +113,7 @@ The implementation is in place; this is the current layout.
 | `src/cuisle/db.py` | SQLite schema, writes, queries, the dashboard snapshot and rollup-aware `series_window`. |
 | `src/cuisle/rollup.py` | Raw to 5-minute/hourly aggregates and scheduled pruning. |
 | `src/cuisle/server.py` | Loopback HTTP server, JSON API (including rollup-aware `/api/series`), and `/icon.svg` / `/favicon.ico` / `/apple-touch-icon.png` routes. |
-| `src/cuisle/dashboard.html` | Single-file dashboard (inline CSS/JS/SVG) with range/series selectors, a chart and the event list; links the icon as favicon and header logo. |
+| `src/cuisle/dashboard.html` | Single-file dashboard (inline CSS/JS/SVG) with range and chart-group selectors, multi-series charts, a legend and the event list; links the icon as favicon and header logo. |
 | `src/cuisle/service.py` | launchd plist generation, install/uninstall/start/stop/status. |
 | `src/cuisle/util.py` | Duration parsing and human-readable byte/rate/time formatting. |
 | `src/cuisle/icons/icon.svg` | Single source of the Cuisle mark: a heartbeat pulse on a network ring. |
@@ -454,9 +454,10 @@ The implementation is in place; this is the current layout.
     is `~/.local/share/cuisle` (no space), but a user can choose one that
     contains spaces. Use `Path.resolve().as_uri() + "?mode=ro"`, not string
     concatenation.
-26. **Never mix probe methods in one series.** The dashboard latency chart
-    filters to ICMP; `history --metric latency_ms` defaults to ICMP and
-    `--method` selects another. A DNS timing is not an HTTP time.
+26. **Never mix probe methods in one series.** The default health group is
+    gateway ICMP; a scope group draws each method as its own coloured series, so
+    a DNS timing is never averaged with an HTTP time. `history --metric
+    latency_ms` defaults to ICMP and `--method` selects another.
 27. **The dashboard's first `/api/status` may have no probes.** Health probes
     run for several seconds at startup. The browser refreshes; do not treat the
     empty first snapshot as a failure or cache it.
@@ -466,12 +467,13 @@ The implementation is in place; this is the current layout.
     bucket count and keeps each bucket's average, minimum, maximum and count.
     A `LIMIT` on raw data for a long window silently shows only the newest
     slice; never do that.
-29. **The dashboard range selector is global; the series selector is explicit.**
-    One range (`1h` … `1y`) drives both History and Events. The series choice
-    names the metric, scope, anchor and method/backend, so latency methods and
-    throughput backends are never mixed. Durations accept `s/m/h/d/w/y`; `1y`
-    is 365 days. The range is remembered in `localStorage` and can be
-    deep-linked as `?range=1y`.
+29. **The dashboard range is global; the chart group is explicit.** One range
+    (`1h` … `1y`) drives both History and Events. A chart group names a set of
+    series that belong together: a health scope (one coloured line per method),
+    a capacity anchor/backend (download and upload in different colours), or
+    host CPU/memory. Series never mix methods or backends. Durations accept
+    `s/m/h/d/w/y`; `1y` is 365 days. Range and chart are remembered in
+    `localStorage` and can be deep-linked as `?range=1y&chart=health:europe`.
 
 ## Project rules
 

@@ -344,13 +344,18 @@ read-only and shows:
 
 - **History and events** — the first cards on the page. A range selector in the
   header covers 1 hour, 24 hours, 7 days, 30 days, 90 days and 1 year. The
-  History card has a series selector for latency per anchor/method, download
-  and upload throughput per anchor/backend, and host CPU/memory. The chart
-  draws an average line with a min/max band and axes; its source is chosen
+  History card has a grouped **Chart** selector:
+  - **Health · LAN / Country / Europe / International** — one coloured line per
+    probe method (DNS, TCP, TLS, HTTP, ICMP) on the same graph, with a legend.
+  - **Capacity · networkQuality or an anchor** — download and upload as
+    separate colours; an anchor shows whichever directions it measures.
+  - **Host · CPU + memory** — two lines.
+  The chart has axes and a colour legend showing each series' last value and
+  average (min/max are in the legend tooltip). Its source is chosen
   automatically from raw (up to 7 days), 5-minute rollups (up to 90 days) and
   hourly rollups (up to a year). The Events card uses the same range and shows
-  the most recent 200 events. The chosen range is remembered on the device and
-  can be deep-linked with `?range=1y` (or `1h`, `24h`, `7d`, `30d`, `90d`).
+  the most recent 200 events. Range and chart are remembered on the device and
+  can be deep-linked with `?range=1y` and `?chart=health:europe`.
 - **Active link** — interface, address, gateway, Wi-Fi signal, counters and
   errors.
 - **Host** — CPU, memory, load and process count.
@@ -533,8 +538,10 @@ reference an environment variable rather than writing the token into the file.
   and not a zero.
 - **No packet capture or content inspection.** This is deliberate.
 - **The dashboard has no authentication.** It is loopback-only by design.
-- **Charts show average, minimum and maximum; not p50/p95.** There is no zoom,
-  pan or tooltip yet, and each chart is a fixed ~300-bucket view.
+- **Charts show averages, not p50/p95.** A single-series chart also draws a
+  min/max band; multi-series charts show last/avg in the legend and min/max in
+  the legend tooltip. There is no zoom, pan or tooltip on the plot yet, and
+  each chart is a fixed ~300-bucket view.
 - **Rollups arrive hourly.** A freshly started daemon has raw data only until
   its first maintenance pass, so 30/90-day and 1-year views can look sparse at
   first.
