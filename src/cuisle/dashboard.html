@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cuisle</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  :root {
+    color-scheme: dark light;
+    --bg: #07141c;
+    --panel: #0d2230;
+    --panel-2: #112c3c;
+    --ink: #e9f7f7;
+    --muted: #8fb0b8;
+    --line: #1b4050;
+    --accent: #3be3c4;
+    --coral: #ff7a6b;
+    --blue: #7cb2ff;
+    --gold: #ffd166;
+    --shadow: 0 12px 40px rgba(0, 0, 0, .25);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f3f8f8;
+      --panel: #ffffff;
+      --panel-2: #eef6f5;
+      --ink: #0b2230;
+      --muted: #5a7078;
+      --line: #d5e4e6;
+      --accent: #0f9c86;
+      --coral: #d94f3d;
+      --blue: #2f6fe0;
+      --gold: #b07d00;
+      --shadow: 0 8px 28px rgba(11, 34, 48, .08);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px;
+    background: radial-gradient(1200px 600px at 20% -10%, var(--panel-2), var(--bg));
+    color: var(--ink);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    max-width: 1320px; margin: 0 auto 18px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand img { width: 42px; height: 42px; border-radius: 11px; }
+  h1 { font-size: 24px; margin: 0; letter-spacing: -.02em; }
+  .brand p { margin: 0; color: var(--muted); font-size: 13px; }
+  .head-right { display: flex; align-items: center; gap: 10px; font-size: 13px; flex-wrap: wrap; justify-content: flex-end; }
+  .badge {
+    display: inline-block; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
+  }
+  .badge.ok { color: var(--accent); border-color: var(--accent); }
+  .badge.warn { color: var(--coral); border-color: var(--coral); }
+  .control {
+    display: inline-flex; align-items: center; gap: 6px; color: var(--muted);
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  }
+  select {
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 4px 8px; font: inherit; font-size: 12px;
+    text-transform: none; letter-spacing: 0; max-width: 260px;
+  }
+  main {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+    gap: 14px; max-width: 1320px; margin: 0 auto;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px 18px; box-shadow: var(--shadow); min-width: 0;
+  }
+  .card.wide { grid-column: 1 / -1; }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 10px;
+  }
+  .card h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--muted); margin: 0; font-weight: 700;
+  }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 5px 14px; font-size: 14px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .big { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 12px; }
+  .stat .n { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .l { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+  .bar { height: 6px; border-radius: 999px; background: var(--panel-2); overflow: hidden; margin-top: 6px; }
+  .bar > i { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+  .bar.warn > i { background: var(--coral); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 8px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 5px 8px 5px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); vertical-align: top; overflow-wrap: anywhere; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .muted { color: var(--muted); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .chart-summary { color: var(--muted); font-size: 12px; margin: 0 0 6px; min-height: 18px; }
+  .chart { width: 100%; height: 220px; display: block; }
+  .chart text { fill: var(--muted); font-size: 10px; }
+  .chart .grid { stroke: var(--line); stroke-width: 1; }
+  .chart .axis { stroke: var(--line); stroke-width: 1; }
+  .chart .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .chart .band { stroke: none; opacity: .14; }
+  .empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
+  footer { max-width: 1320px; margin: 18px auto 0; color: var(--muted); font-size: 12px; text-align: center; }
+  @media (max-width: 620px) {
+    body { padding: 14px; }
+    header { align-items: flex-start; flex-direction: column; gap: 8px; }
+    .head-right { justify-content: flex-start; }
+    .kv dd { text-align: left; }
+    select { max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <img src="/icon.svg" alt="" width="42" height="42">
+    <div>
+      <h1>Cuisle</h1>
+      <p>a heartbeat for the network</p>
+    </div>
+  </div>
+  <div class="head-right">
+    <label class="control">Range
+      <select id="range-select">
+        <option value="1h">1 hour</option>
+        <option value="24h">24 hours</option>
+        <option value="7d">7 days</option>
+        <option value="30d">30 days</option>
+        <option value="90d">90 days</option>
+        <option value="1y">1 year</option>
+      </select>
+    </label>
+    <span id="link-badge" class="badge">connecting</span>
+    <span id="updated" class="muted"></span>
+  </div>
+</header>
+
+<main>
+  <section class="card wide">
+    <div class="card-head">
+      <h2>History</h2>
+      <label class="control">Series <select id="series-select"></select></label>
+    </div>
+    <div id="history-summary" class="chart-summary"></div>
+    <div id="history-chart" class="empty">Waiting for the daemon…</div>
+  </section>
+
+  <section class="card wide">
+    <div class="card-head">
+      <h2>Events</h2>
+      <span id="events-count" class="muted"></span>
+    </div>
+    <div id="events-card" class="empty">Waiting for the daemon…</div>
+  </section>
+
+  <section class="card">
+    <h2>Active link</h2>
+    <div id="link-card" class="empty">Waiting for the daemon…</div>
+  </section>
+
+  <section class="card">
+    <h2>Host</h2>
+    <div id="host-card" class="empty">Waiting for the daemon…</div>
+  </section>
+
+  <section class="card wide">
+    <h2>Network health</h2>
+    <div id="health-card" class="empty">Waiting for the daemon…</div>
+  </section>
+
+  <section class="card">
+    <h2>Throughput</h2>
+    <div id="throughput-card" class="empty">Waiting for the daemon…</div>
+  </section>
+
+  <section class="card">
+    <h2>Network processes</h2>
+    <div id="network-card" class="empty">Waiting for the daemon…</div>
+  </section>
+
+  <section class="card wide">
+    <h2>Top processes</h2>
+    <div id="process-card" class="empty">Waiting for the daemon…</div>
+  </section>
+
+  <section class="card wide">
+    <h2>Connections</h2>
+    <div id="connections-card" class="empty">Waiting for the daemon…</div>
+  </section>
+</main>
+
+<footer>Cuisle · local only · data stays on this Mac</footer>
+
+<script>
+(() => {
+  "use strict";
+  const NS = "http://www.w3.org/2000/svg";
+  const $ = (id) => document.getElementById(id);
+  const RANGES = ["1h", "24h", "7d", "30d", "90d", "1y"];
+  const COLORS = { latency: "--accent", throughput: "--coral", host: "--blue", rssi: "--gold" };
+
+  function el(tag, attrs = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(attrs)) {
+      if (key === "class") node.className = value;
+      else if (key === "text") node.textContent = value;
+      else node.setAttribute(key, value);
+    }
+    for (const child of children) {
+      if (child !== null && child !== undefined) {
+        node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+      }
+    }
+    return node;
+  }
+
+  function svgEl(tag, attrs = {}) {
+    const node = document.createElementNS(NS, tag);
+    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+    return node;
+  }
+
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+  function readState(key, fallback) {
+    try { return localStorage.getItem(key) || fallback; } catch { return fallback; }
+  }
+  function writeState(key, value) {
+    try { localStorage.setItem(key, value); } catch { /* private mode */ }
+  }
+
+  function fmtBytes(n) {
+    if (n === null || n === undefined) return "–";
+    let v = Number(n);
+    for (const unit of ["B", "KiB", "MiB", "GiB", "TiB"]) {
+      if (Math.abs(v) < 1024 || unit === "TiB") return v.toFixed(unit === "B" ? 0 : 1) + " " + unit;
+      v /= 1024;
+    }
+    return "–";
+  }
+  function fmtBps(n) {
+    if (n === null || n === undefined) return "–";
+    const v = Number(n);
+    if (Math.abs(v) >= 1e9) return (v / 1e9).toFixed(1) + " Gbps";
+    if (Math.abs(v) >= 1e6) return (v / 1e6).toFixed(1) + " Mbps";
+    if (Math.abs(v) >= 1e3) return (v / 1e3).toFixed(1) + " kbps";
+    return v.toFixed(0) + " bps";
+  }
+  function fmtMs(n) { return n === null || n === undefined ? "–" : Number(n).toFixed(1) + " ms"; }
+  function fmtPct(n, d = 1) { return n === null || n === undefined ? "–" : Number(n).toFixed(d) + "%"; }
+  function fmtTime(ts) {
+    if (!ts) return "–";
+    return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+  function ago(ts) {
+    if (!ts) return "never";
+    const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 60) return s + "s ago";
+    if (s < 3600) return Math.round(s / 60) + "m ago";
+    return Math.round(s / 3600) + "h ago";
+  }
+  function formatterFor(metric) {
+    if (metric === "latency_ms") return fmtMs;
+    if (metric === "down_bps" || metric === "up_bps") return fmtBps;
+    if (metric === "cpu_pct" || metric === "mem_pct" || metric === "loss_pct") return (v) => fmtPct(v);
+    if (metric === "rssi_dbm") return (v) => (v === null || v === undefined ? "–" : Number(v).toFixed(0) + " dBm");
+    return (v) => (v === null || v === undefined ? "–" : String(v));
+  }
+  function colorFor(metric) {
+    if (metric === "down_bps" || metric === "up_bps") return cssVar(COLORS.throughput) || "#ff7a6b";
+    if (metric === "cpu_pct" || metric === "mem_pct") return cssVar(COLORS.host) || "#7cb2ff";
+    if (metric === "rssi_dbm") return cssVar(COLORS.rssi) || "#ffd166";
+    return cssVar(COLORS.latency) || "#3be3c4";
+  }
+  function formatAxisTime(ts, range) {
+    const date = new Date(ts);
+    if (range === "1h" || range === "24h") {
+      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    if (range === "7d") {
+      return date.toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
+    }
+    if (range === "30d") {
+      return date.toLocaleDateString([], { day: "numeric", month: "short" });
+    }
+    return date.toLocaleDateString([], { month: "short", year: "2-digit" });
+  }
+  function endpoint(addr, port) {
+    if (!port) return addr || "–";
+    const host = addr && addr.includes(":") ? `[${addr}]` : (addr || "*");
+    return `${host}:${port}`;
+  }
+  function badge(text, kind = "") { return el("span", { class: `badge ${kind}`, text }); }
+  function kv(rows) {
+    const dl = el("dl", { class: "kv" });
+    for (const [label, value] of rows) {
+      dl.append(el("dt", { text: label }), el("dd", {}, value instanceof Node ? value : String(value)));
+    }
+    return dl;
+  }
+  function table(headers, rows, numeric = []) {
+    const t = el("table");
+    const thead = el("thead");
+    const hr = el("tr");
+    headers.forEach((h, i) => hr.append(el("th", { class: numeric.includes(i) ? "num" : "", text: h })));
+    thead.append(hr);
+    const tbody = el("tbody");
+    rows.forEach((row) => {
+      const tr = el("tr");
+      row.forEach((cell, i) => {
+        tr.append(el("td", { class: numeric.includes(i) ? "num" : "" }, cell instanceof Node ? cell : String(cell)));
+      });
+      tbody.append(tr);
+    });
+    t.append(thead, tbody);
+    return t;
+  }
+  function empty(text) { return el("div", { class: "empty", text }); }
+
+  function lineChart(points, series, windowRange, range) {
+    const svg = svgEl("svg", { class: "chart", viewBox: "0 0 1000 220", preserveAspectRatio: "none", role: "img", "aria-label": series.label });
+    const values = points.map((p) => Number(p.value)).filter(Number.isFinite);
+    if (values.length === 0) {
+      const text = svgEl("text", { x: "12", y: "34" });
+      text.textContent = "no numeric data for this range";
+      svg.append(text);
+      return svg;
+    }
+    const W = 1000, H = 220, m = { l: 66, r: 16, t: 18, b: 30 };
+    const plotW = W - m.l - m.r, plotH = H - m.t - m.b;
+    const since = windowRange && Number.isFinite(windowRange.since) ? windowRange.since : points[0].ts;
+    const until = windowRange && Number.isFinite(windowRange.until) ? windowRange.until : points[points.length - 1].ts;
+    const x0 = Math.min(since, until), x1 = Math.max(since, until);
+    const xSpan = Math.max(1, x1 - x0);
+    const yValues = [];
+    for (const p of points) {
+      if (Number.isFinite(Number(p.value))) yValues.push(Number(p.value));
+      if (Number.isFinite(Number(p.min))) yValues.push(Number(p.min));
+      if (Number.isFinite(Number(p.max))) yValues.push(Number(p.max));
+    }
+    let yMin = Math.min(...yValues), yMax = Math.max(...yValues);
+    if (!Number.isFinite(yMin) || !Number.isFinite(yMax)) { yMin = 0; yMax = 1; }
+    if (yMin === yMax) { const pad = Math.abs(yMin) * 0.05 || 1; yMin -= pad; yMax += pad; }
+    const yPad = (yMax - yMin) * 0.06;
+    yMin -= yPad; yMax += yPad;
+    const x = (ts) => m.l + ((ts - x0) / xSpan) * plotW;
+    const y = (v) => m.t + ((yMax - v) / (yMax - yMin)) * plotH;
+    const lineColor = colorFor(series.metric);
+    const gridColor = cssVar("--line") || "#1b4050";
+    const muted = cssVar("--muted") || "#8fb0b8";
+    const fmt = formatterFor(series.metric);
+
+    for (let i = 0; i <= 3; i++) {
+      const value = yMin + ((yMax - yMin) * i) / 3;
+      const yy = y(value);
+      svg.append(svgEl("line", { class: "grid", x1: String(m.l), y1: String(yy), x2: String(W - m.r), y2: String(yy), stroke: gridColor }));
+      const label = svgEl("text", { x: String(m.l - 6), y: String(yy + 3), "text-anchor": "end", fill: muted });
+      label.textContent = fmt(value);
+      svg.append(label);
+    }
+    for (let i = 0; i <= 2; i++) {
+      const ts = x0 + ((x1 - x0) * i) / 2;
+      const xx = x(ts);
+      const label = svgEl("text", { x: String(xx), y: String(H - 8), "text-anchor": i === 0 ? "start" : i === 2 ? "end" : "middle", fill: muted });
+      label.textContent = formatAxisTime(ts, range);
+      svg.append(label);
+    }
+
+    const band = points.filter((p) => Number.isFinite(Number(p.min)) && Number.isFinite(Number(p.max)));
+    if (band.length > 1 && band.some((p) => Number(p.max) !== Number(p.min))) {
+      const top = band.map((p) => `${x(p.ts).toFixed(1)},${y(Number(p.max)).toFixed(1)}`);
+      const bottom = band.slice().reverse().map((p) => `${x(p.ts).toFixed(1)},${y(Number(p.min)).toFixed(1)}`);
+      svg.append(svgEl("path", {
+        class: "band",
+        d: `M${top[0]} L${top.slice(1).join(" L")} L${bottom.join(" L")} Z`,
+        fill: lineColor,
+      }));
+    }
+
+    const coords = points.map((p) => `${x(p.ts).toFixed(1)},${y(Number(p.value)).toFixed(1)}`);
+    svg.append(svgEl("polyline", {
+      class: "line",
+      points: coords.join(" "),
+      stroke: lineColor,
+      "vector-effect": "non-scaling-stroke",
+    }));
+    if (points.length === 1) {
+      svg.append(svgEl("circle", { cx: String(x(points[0].ts)), cy: String(y(Number(points[0].value))), r: "3", fill: lineColor }));
+    }
+    return svg;
+  }
+
+  // -- state --------------------------------------------------------------
+
+  const urlRange = new URLSearchParams(location.search).get("range");
+  const storedRange = readState("cuisle.range", "24h");
+  const initialRange = RANGES.includes(urlRange || "") ? urlRange : storedRange;
+  const state = {
+    range: RANGES.includes(initialRange) ? initialRange : "24h",
+    seriesKey: readState("cuisle.series", ""),
+    series: null,
+    config: null,
+    seriesData: null,
+    lastSeriesFetch: 0,
+  };
+
+  function specValue(spec) {
+    const clean = {};
+    for (const [k, v] of Object.entries(spec)) if (v !== null && v !== undefined && v !== "") clean[k] = v;
+    return JSON.stringify(clean);
+  }
+
+  function addOption(group, label, spec) {
+    const option = el("option", { value: specValue(spec), text: label });
+    option._spec = { ...spec, label };
+    group.append(option);
+    return option;
+  }
+
+  function buildSeriesOptions() {
+    const select = $("series-select");
+    clear(select);
+    const config = state.config;
+    const latency = el("optgroup", { label: "Latency" });
+    const throughput = el("optgroup", { label: "Throughput" });
+    const host = el("optgroup", { label: "Host" });
+
+    const anchors = config && Array.isArray(config.anchors) ? config.anchors : [
+      { name: "gateway", scope: "lan", health: ["icmp"], backend: "http" },
+      { name: "networkquality", scope: "capacity", health: [], backend: "networkquality" },
+    ];
+    for (const anchor of anchors) {
+      for (const method of anchor.health || []) {
+        addOption(latency, `${anchor.scope} · ${anchor.name} · ${method}`, {
+          metric: "latency_ms", scope: anchor.scope, anchor: anchor.name, method,
+        });
+      }
+    }
+    addOption(throughput, "capacity · networkQuality · download", {
+      metric: "down_bps", scope: "capacity", anchor: "networkquality", method: "networkquality",
+    });
+    addOption(throughput, "capacity · networkQuality · upload", {
+      metric: "up_bps", scope: "capacity", anchor: "networkquality", method: "networkquality",
+    });
+    for (const anchor of anchors) {
+      const backend = anchor.backend || "http";
+      if (backend === "http") {
+        if (anchor.download_url) addOption(throughput, `${anchor.scope} · ${anchor.name} · download`, {
+          metric: "down_bps", scope: anchor.scope, anchor: anchor.name, method: backend,
+        });
+        if (anchor.upload_url) addOption(throughput, `${anchor.scope} · ${anchor.name} · upload`, {
+          metric: "up_bps", scope: anchor.scope, anchor: anchor.name, method: backend,
+        });
+      } else if (backend === "speedtest") {
+        addOption(throughput, `${anchor.scope} · ${anchor.name} · download`, {
+          metric: "down_bps", scope: anchor.scope, anchor: anchor.name, method: backend,
+        });
+        addOption(throughput, `${anchor.scope} · ${anchor.name} · upload`, {
+          metric: "up_bps", scope: anchor.scope, anchor: anchor.name, method: backend,
+        });
+      } else if (backend === "iperf3") {
+        if (anchor.direction === "up" || anchor.direction === "both") addOption(throughput, `${anchor.scope} · ${anchor.name} · upload`, {
+          metric: "up_bps", scope: anchor.scope, anchor: anchor.name, method: backend,
+        });
+        if (anchor.direction === "down" || anchor.direction === "both") addOption(throughput, `${anchor.scope} · ${anchor.name} · download`, {
+          metric: "down_bps", scope: anchor.scope, anchor: anchor.name, method: backend,
+        });
+      }
+    }
+    addOption(host, "CPU %", { metric: "cpu_pct" });
+    addOption(host, "Memory %", { metric: "mem_pct" });
+
+    select.append(latency, throughput, host);
+    let selected = null;
+    for (const option of select.options) {
+      if (option.value === state.seriesKey) { selected = option; break; }
+    }
+    if (!selected) {
+      selected = Array.from(select.options).find((o) => o._spec && o._spec.method === "icmp" && o._spec.scope === "lan")
+        || Array.from(select.options).find((o) => o._spec && o._spec.metric === "down_bps" && o._spec.anchor === "networkquality")
+        || select.options[0];
+    }
+    if (selected) {
+      select.value = selected.value;
+      state.seriesKey = selected.value;
+      state.series = selected._spec;
+      writeState("cuisle.series", state.seriesKey);
+    }
+    select.addEventListener("change", () => {
+      const option = select.options[select.selectedIndex];
+      if (!option || !option._spec) return;
+      state.seriesKey = option.value;
+      state.series = option._spec;
+      writeState("cuisle.series", state.seriesKey);
+      refresh(true);
+    });
+  }
+
+  function buildRangeOptions() {
+    const select = $("range-select");
+    select.value = state.range;
+    select.addEventListener("change", () => {
+      state.range = select.value;
+      writeState("cuisle.range", state.range);
+      refresh(true);
+    });
+  }
+
+  // -- renderers ----------------------------------------------------------
+
+  function renderLink(data) {
+    const node = $("link-card");
+    clear(node);
+    const active = data.active;
+    if (!active) { node.append(empty("No active interface sample yet.")); return; }
+    const signal = [];
+    if (active.rssi_dbm !== null && active.rssi_dbm !== undefined) {
+      signal.push(`${active.rssi_dbm} dBm`);
+      if (active.noise_dbm !== null && active.noise_dbm !== undefined) signal.push(`SNR ${Math.round(active.rssi_dbm - active.noise_dbm)} dB`);
+    }
+    if (active.band) signal.push(active.band);
+    if (active.channel) signal.push(`ch ${active.channel}`);
+    if (active.width_mhz) signal.push(`${active.width_mhz} MHz`);
+    const rows = [
+      ["Interface", `${active.ifname} (${active.kind || "unknown"})`],
+      ["Address", active.ipv4 || active.ipv6 || "–"],
+      ["Gateway", active.gateway || "–"],
+    ];
+    if (active.ssid) rows.push(["SSID", active.ssid]);
+    if (signal.length) rows.push(["Signal", signal.join(" · ")]);
+    if (active.tx_rate_mbps) rows.push(["Tx rate", `${active.tx_rate_mbps.toFixed(0)} Mbps`]);
+    if (active.link_speed_mbps) rows.push(["Link speed", `${active.link_speed_mbps} Mbps`]);
+    rows.push(["Traffic", `${fmtBytes(active.rx_bytes)} rx · ${fmtBytes(active.tx_bytes)} tx`]);
+    if (active.rx_errors || active.tx_errors) rows.push(["Errors", `${active.rx_errors || 0} rx · ${active.tx_errors || 0} tx`]);
+    node.append(kv(rows));
+    if (data.stale) node.append(el("p", { class: "muted", text: `Last sample ${ago(data.host && data.host.ts)}.` }));
+  }
+
+  function renderHost(data) {
+    const node = $("host-card");
+    clear(node);
+    const host = data.host;
+    if (!host) { node.append(empty("No host sample yet.")); return; }
+    const memPct = host.mem_total ? (host.mem_used / host.mem_total) * 100 : 0;
+    const big = el("div", { class: "big" });
+    big.append(
+      el("div", { class: "stat" }, el("div", { class: "n", text: fmtPct(host.cpu_pct) }), el("div", { class: "l", text: "CPU" })),
+      el("div", { class: "stat" }, el("div", { class: "n", text: fmtPct(memPct) }), el("div", { class: "l", text: "Memory" })),
+      el("div", { class: "stat" }, el("div", { class: "n", text: Number(host.load1 || 0).toFixed(2) }), el("div", { class: "l", text: "Load" })),
+      el("div", { class: "stat" }, el("div", { class: "n", text: host.process_count }), el("div", { class: "l", text: "Processes" })),
+    );
+    node.append(big);
+    const cpuBar = el("div", { class: "bar" + (host.cpu_pct > 85 ? " warn" : "") }, el("i", { style: `width:${Math.min(100, host.cpu_pct)}%` }));
+    const memBar = el("div", { class: "bar" + (memPct > 90 ? " warn" : "") }, el("i", { style: `width:${Math.min(100, memPct)}%` }));
+    node.append(el("div", { class: "muted", text: `CPU ${fmtPct(host.cpu_pct)}` }), cpuBar);
+    node.append(el("div", { class: "muted", text: `${fmtBytes(host.mem_used)} of ${fmtBytes(host.mem_total)}` }), memBar);
+  }
+
+  function renderHealth(data) {
+    const node = $("health-card");
+    clear(node);
+    if (!data.probes.length) { node.append(empty("No probes yet.")); return; }
+    const rows = data.probes.map((p) => [
+      p.scope, p.anchor, p.method,
+      fmtMs(p.latency_ms),
+      fmtPct(p.loss_pct, 0),
+      badge(p.success ? "ok" : "fail", p.success ? "ok" : "warn"),
+    ]);
+    node.append(table(["Scope", "Anchor", "Method", "Latency", "Loss", "Status"], rows, [3, 4]));
+  }
+
+  function renderThroughput(data) {
+    const node = $("throughput-card");
+    clear(node);
+    if (!data.throughputs.length) { node.append(empty("No throughput samples yet.")); return; }
+    const rows = data.throughputs.map((t) => [
+      t.anchor, t.backend, fmtBps(t.down_bps), fmtBps(t.up_bps), t.server || "–",
+      badge(t.success ? "ok" : "fail", t.success ? "ok" : "warn"),
+    ]);
+    node.append(table(["Anchor", "Backend", "Down", "Up", "Server", ""], rows, [2, 3]));
+    const q = data.throughputs.find((t) => t.backend === "networkquality");
+    if (q && q.latency_ms !== null) node.append(el("p", { class: "muted", text: `base RTT ${fmtMs(q.latency_ms)}` }));
+  }
+
+  function renderNetworkProcesses(data) {
+    const node = $("network-card");
+    clear(node);
+    const rows = data.network_processes.filter((p) => (p.rx_bps || 0) + (p.tx_bps || 0) > 0);
+    if (!rows.length) { node.append(empty("No active network processes in the last 15 minutes.")); return; }
+    node.append(table(["Process", "RX/s", "TX/s"], rows.map((p) => [p.name, fmtBps(p.rx_bps), fmtBps(p.tx_bps)]), [1, 2]));
+  }
+
+  function renderProcesses(data) {
+    const node = $("process-card");
+    clear(node);
+    if (!data.processes.length) { node.append(empty("No process samples yet.")); return; }
+    const rows = data.processes.map((p) => [p.name, p.pid, fmtPct(p.cpu_pct), fmtBytes(p.rss_bytes), p.threads]);
+    node.append(table(["Process", "PID", "CPU", "Memory", "Threads"], rows, [1, 2, 3, 4]));
+  }
+
+  function renderConnections(data) {
+    const node = $("connections-card");
+    clear(node);
+    const rows = data.connections.filter((c) => (c.rx_bps || 0) + (c.tx_bps || 0) > 0).slice(0, 20);
+    if (!rows.length) { node.append(empty("No active connections in the last 15 minutes.")); return; }
+    node.append(table(
+      ["Process", "Proto", "Local", "Remote", "State", "RX/s", "TX/s"],
+      rows.map((c) => [
+        c.name || (c.pid !== null ? `pid ${c.pid}` : "–"),
+        c.proto,
+        endpoint(c.local_addr, c.local_port),
+        endpoint(c.remote_addr, c.remote_port),
+        c.state,
+        fmtBps(c.rx_bps),
+        fmtBps(c.tx_bps),
+      ]),
+      [5, 6],
+    ));
+  }
+
+  function renderStatus(data) {
+    renderLink(data);
+    renderHost(data);
+    renderHealth(data);
+    renderThroughput(data);
+    renderNetworkProcesses(data);
+    renderProcesses(data);
+    renderConnections(data);
+    const badgeNode = $("link-badge");
+    if (data.stale) {
+      badgeNode.className = "badge warn";
+      badgeNode.textContent = "stale";
+    } else {
+      badgeNode.className = "badge ok";
+      badgeNode.textContent = data.active ? `${data.active.ifname} · ${data.active.kind || "link"}` : "online";
+    }
+    $("updated").textContent = `updated ${fmtTime(data.server_time)}`;
+  }
+
+  function renderEvents(events, range) {
+    const node = $("events-card");
+    clear(node);
+    $("events-count").textContent = `${events.length} in ${range}`;
+    if (!events.length) { node.append(empty(`No events in the last ${range}.`)); return; }
+    node.append(table(
+      ["Time", "Event", "Detail"],
+      events.map((e) => [fmtTime(e.ts), e.kind, e.detail]),
+    ));
+  }
+
+  function renderHistory(data, series) {
+    const summary = $("history-summary");
+    const node = $("history-chart");
+    clear(node);
+    if (!data || !data.points || !data.points.length) {
+      summary.textContent = data ? `No data for this range · ${data.resolution}` : "";
+      node.append(empty("No data for this range."));
+      return;
+    }
+    const points = data.points;
+    const fmt = formatterFor(series.metric);
+    const label = series.label || series.metric;
+    const values = points.map((p) => Number(p.value)).filter(Number.isFinite);
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+    const min = Math.min(...points.map((p) => Number(p.min ?? p.value)).filter(Number.isFinite));
+    const max = Math.max(...points.map((p) => Number(p.max ?? p.value)).filter(Number.isFinite));
+    const bucketWord = points.length === 1 ? "bucket" : "buckets";
+    summary.textContent = `${label} · ${data.resolution} · last ${fmt(values[values.length - 1])} · avg ${fmt(avg)} · min ${fmt(min)} · max ${fmt(max)} · ${points.length} ${bucketWord}`;
+    node.append(lineChart(points, series, data.window, state.range));
+  }
+
+  // -- data ---------------------------------------------------------------
+
+  async function api(path) {
+    const response = await fetch(path, { cache: "no-store" });
+    if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
+    return response.json();
+  }
+
+  function seriesUrl(series) {
+    const params = new URLSearchParams({
+      metric: series.metric,
+      since: state.range,
+      points: "300",
+      resolution: "auto",
+    });
+    if (series.scope) params.set("scope", series.scope);
+    if (series.anchor) params.set("anchor", series.anchor);
+    if (series.method) params.set("method", series.method);
+    return `/api/series?${params.toString()}`;
+  }
+
+  let timer = null;
+  let busy = false;
+  let pendingForce = false;
+
+  async function refresh(forceSeries = false) {
+    if (busy) { pendingForce = pendingForce || forceSeries; return; }
+    busy = true;
+    clearTimeout(timer);
+    const wantSeries = forceSeries || !state.seriesData || Date.now() - state.lastSeriesFetch > 30000;
+    const seriesPromise = state.series
+      ? (wantSeries ? api(seriesUrl(state.series)) : Promise.resolve(state.seriesData))
+      : Promise.resolve(null);
+    const [statusResult, eventsResult, seriesResult] = await Promise.allSettled([
+      api("/api/status"),
+      api(`/api/events?since=${encodeURIComponent(state.range)}&limit=200`),
+      seriesPromise,
+    ]);
+    if (statusResult.status === "fulfilled") {
+      renderStatus(statusResult.value);
+    } else {
+      const badgeNode = $("link-badge");
+      badgeNode.className = "badge warn";
+      badgeNode.textContent = "daemon not reachable";
+      for (const id of ["link-card", "host-card", "health-card", "throughput-card", "network-card", "process-card", "connections-card"]) {
+        const node = $(id);
+        if (node) { clear(node); node.append(empty(statusResult.reason.message)); }
+      }
+    }
+    if (eventsResult.status === "fulfilled") {
+      renderEvents(eventsResult.value.events || [], state.range);
+    } else {
+      const node = $("events-card");
+      clear(node);
+      node.append(empty(eventsResult.reason.message));
+    }
+    if (seriesResult.status === "fulfilled" && seriesResult.value) {
+      if (wantSeries) {
+        state.seriesData = seriesResult.value;
+        state.lastSeriesFetch = Date.now();
+      }
+      renderHistory(seriesResult.value, state.series);
+    } else if (seriesResult.status === "rejected") {
+      const node = $("history-chart");
+      clear(node);
+      node.append(empty(seriesResult.reason.message));
+      $("history-summary").textContent = "";
+    }
+    busy = false;
+    const nextForce = pendingForce;
+    pendingForce = false;
+    timer = setTimeout(() => refresh(nextForce), document.hidden ? 15000 : 5000);
+  }
+
+  async function init() {
+    buildRangeOptions();
+    try {
+      state.config = await api("/api/config");
+    } catch {
+      state.config = null;
+    }
+    buildSeriesOptions();
+    await refresh(true);
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refresh(false);
+  });
+  init();
+})();
+</script>
+</body>
+</html>

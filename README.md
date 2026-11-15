@@ -7,12 +7,38 @@
 **A permanent, local-only monitor for macOS processes, connections, link health
 and throughput.**
 
-> **Status: design stage.** This repository currently contains the design, not
-> a working tool. The commands, output and configuration below are the intended
-> interface; they become real in the first implementation milestone.
-> [`AGENTS.md`](./AGENTS.md) is the contract for building it.
+> **Status: working MVP.** The daemon, samplers, probes, SQLite store, CLI,
+> dashboard, report, icon pipeline and tests work. The optional CoreWLAN,
+> Ookla Speedtest and iperf3 paths are implemented but not all exercised on
+> this machine; the launchd plist is generated and tested, but the agent was
+> not installed here. See [Status](#status).
 >
 > The repository is `ptaylor/cuisle`; the installed command is `cuisle`.
+
+## Status
+
+Working and exercised on macOS 15.7.9:
+
+- Process, socket, interface and host sampling without `sudo`.
+- DNS/TCP/TLS/HTTP/ICMP probes to the default anchors.
+- The HTTP throughput backend, tested against a local server, and
+  `networkQuality` JSON parsing.
+- The daemon loop, loopback dashboard, HTML report, rollups, retention and
+  `install.sh`.
+- 63 tests and a clean `ruff check .`.
+
+Not yet exercised on this machine:
+
+- CoreWLAN (optional extra not installed): Wi-Fi names and signal are
+  unavailable; the interface and its traffic are still sampled.
+- Live Ookla Speedtest and iperf3 runs: the installed `speedtest` is a broken
+  Python shim and `iperf3` is not installed. Their backends and parsers are
+  covered by tests with schema fixtures.
+- `cuisle service install` beyond plist generation: installing a launchd agent
+  on this Mac was deliberately left to the user.
+- A long-running soak test. A 15-second daemon-loop smoke test produced host,
+  process, socket, interface and probe samples and a live dashboard.
+
 
 ## What it does
 
@@ -37,8 +63,8 @@ database and shown through a CLI and a dashboard that listens only on loopback.
 | Area | What is sampled |
 | --- | --- |
 | **Processes** | PID, name, user, CPU %, resident memory, thread count, state and start time. Network-active processes are ranked by bytes in and out. |
-| **Connections** | TCP and UDP sockets: local and remote address, state, owning PID, per-socket bytes in/out and duration. Listening and established sockets are both visible. |
-| **Interfaces** | The interface carrying the default route, the physical port behind it (Wi-Fi, Ethernet, USB LAN, Thunderbolt, VPN), addresses, gateway, link speed and interface error/drop counters. |
+| **Connections** | TCP and UDP sockets: local and remote address, state, owning PID and per-socket bytes in/out. Listening and established sockets are both visible. |
+| **Interfaces** | The interface carrying the default route, the physical port behind it (Wi-Fi, Ethernet, USB LAN, Thunderbolt, VPN), addresses, gateway, link speed and interface error counters. |
 | **Wi-Fi (optional)** | SSID, BSSID, RSSI, noise, SNR, channel, band, width and transmit rate, when CoreWLAN and Location Services allow it. |
 | **Health** | Per probe anchor: DNS resolution, TCP connect, TLS handshake and certificate expiry, HTTP status and time, and ICMP loss/jitter/latency. |
 | **Throughput** | Per anchor: download and upload bits per second via HTTP, Ookla Speedtest or iperf3. Plus Apple `networkQuality` capacity, base RTT and responsiveness for the active interface. |
@@ -76,8 +102,9 @@ different connections.
 
 Anchors are ordinary configuration, not hard-coded addresses. Each one names a
 scope, a host and port, the health methods to run, and optionally a throughput
-backend with a download or upload URL. `cuisle doctor --anchors` resolves,
-connects and reads a bounded number of bytes before an anchor is trusted; one
+backend with a download or upload URL. `cuisle doctor --anchors` runs the
+configured health probes and reports what it can verify; a throughput run
+(`cuisle speed --now`) is what verifies a download URL or server ID. An anchor
 that fails is reported, not silently used.
 
 ### Anchors must be verified
@@ -92,10 +119,11 @@ path. Cases observed on this machine:
   Irish health anchor.
 
 For throughput, a public file mirror in the target region is more honest than a
-CDN URL, but third-party paths change. `doctor --anchors` is the check, and the
-configuration is meant to be edited. The default set assumes Ireland and is
-only an example. The same applies to an Ookla server ID and an iperf3 host:
-`doctor` records what it can verify and says when it cannot.
+CDN URL, but third-party paths change. `doctor --anchors` checks health;
+`cuisle speed --now` checks the throughput URL or server. The configuration is
+meant to be edited. The default set assumes Ireland and is only an example. The
+same applies to an Ookla server ID and an iperf3 host: a throughput run records
+what it can verify and says when it cannot.
 
 Upload throughput needs a writable endpoint, or an anchor that uses the
 `speedtest` or `iperf3` backend. If neither is available, Cuisle records
@@ -199,11 +227,17 @@ SQLite in WAL mode, with one daemon writer and independent readers. Raw samples
 are kept for 7 days, 5-minute rollups for 90 days, and hourly rollups for a
 year. Growth is bounded by construction: only top-N process rows, only socket
 deltas or state changes, and scheduled pruning. The database lives under
-`~/Library/Application Support/cuisle/`.
+`~/.local/share/cuisle/`.
+
+The dashboard and `cuisle history` read raw data for windows up to 7 days,
+5-minute rollups up to 90 days, and hourly rollups up to a year. Long windows
+are downsampled to about 300 chart buckets, each carrying an average, minimum,
+maximum and sample count. Rollups are written by the hourly maintenance pass; a
+fresh daemon therefore falls back to raw data until its first rollup run.
 
 ## Install
 
-Planned installation, once the scaffold lands:
+Install from the repository:
 
 ```sh
 git clone https://github.com/ptaylor/cuisle.git
@@ -233,7 +267,8 @@ Requirements:
   different tool; `cuisle doctor` detects both and says which is available.
 
 `install.sh` is idempotent, refuses to overwrite an unrelated file, and warns
-when the target directory is not on `PATH`.
+when the target directory is not on `PATH`. The launchd agent is optional;
+`cuisle daemon run` works without it.
 
 To remove it:
 
@@ -243,7 +278,7 @@ rm ~/bin/cuisle
 ```
 
 The database and logs are left in place; remove
-`~/Library/Application Support/cuisle` and `~/Library/Logs/cuisle` yourself if
+`~/.local/share/cuisle` and `~/Library/Logs/cuisle` yourself if
 you want them gone.
 
 ## Usage
@@ -255,21 +290,22 @@ Units are in the JSON key names (`latency_ms`, `down_bps`, `rssi_dbm`).
 | --- | --- |
 | `cuisle status` | One-screen snapshot: link, health per scope, throughput and top processes. |
 | `cuisle watch` | Refresh the snapshot in place; `--interval` sets the cadence. |
+| `cuisle daemon run` | Run the sampler loop in the foreground; `--once` takes one light sample. |
 | `cuisle processes` | Top processes by CPU, memory, received bytes or sent bytes. |
 | `cuisle connections` | Sockets, filtered by state, process or address. |
-| `cuisle health` | Current latency, loss and jitter per anchor, with p50/p95 history. |
-| `cuisle speed` | Run a throughput test now (`--backend` is `http`, `speedtest` or `iperf3`), or show the last result. |
-| `cuisle history` | Query a series over time (`--metric`, `--scope`, `--since`). |
-| `cuisle report` | Self-contained HTML report for a time range. |
-| `cuisle dashboard` | Open the daemon's dashboard; `--standalone` serves the database read-only. |
+| `cuisle health` | Latest latency, loss and jitter per anchor; `--now` runs the probes. |
+| `cuisle speed` | Run a throughput test now with `--now` (`--backend` is `http`, `speedtest` or `iperf3`; `--no-networkquality` skips the ~90 MB Apple test), or show the last result. |
+| `cuisle history` | Query a series over time (`--metric`, `--scope`, `--anchor`, `--method`, `--since`, `--resolution auto|raw|5m|1h`, `--points`). |
+| `cuisle report` | Self-contained HTML report for a time range; writes to `./reports/` by default, `--output` overrides. |
+| `cuisle dashboard` | Open the daemon's dashboard in the default browser; `--no-open` prints the URL, `--standalone` serves the database read-only. |
 | `cuisle service` | `install`, `uninstall`, `start`, `stop`, `restart`, `status`. |
-| `cuisle doctor` | Check tools, SQLite, launchd, permissions, anchors and optional backends. |
-| `cuisle config` | Open the configuration file in `$EDITOR`. |
+| `cuisle doctor` | Check tools, SQLite, launchd, permissions, anchors (`--anchors`) and optional backends. |
+| `cuisle config` | Open the configuration file in `$EDITOR` (`--show` prints it). |
 | `cuisle paths` | Show config, data, log and plist locations. |
 
 ### Illustrative output
 
-This is the design target, not current output:
+Representative output; numbers vary:
 
 ```text
 ACTIVE LINK
@@ -304,20 +340,28 @@ TOP PROCESSES (CPU, now)
 ## Dashboard
 
 The daemon serves a single-file dashboard at `http://127.0.0.1:8787`. It is
-read-only and built around four views:
+read-only and shows:
 
-- **Now** — active interface, Wi-Fi signal, gateway reachability, current
-  latency/loss per scope, and the last throughput result.
-- **Processes** — top talkers and top consumers, with sparklines over the
-  selected time range.
-- **Connections** — a filterable socket table with process, remote address,
-  state and bytes.
-- **History** — latency, loss, throughput and signal over time, with the
-  interface and method shown alongside every series.
+- **History and events** — the first cards on the page. A range selector in the
+  header covers 1 hour, 24 hours, 7 days, 30 days, 90 days and 1 year. The
+  History card has a series selector for latency per anchor/method, download
+  and upload throughput per anchor/backend, and host CPU/memory. The chart
+  draws an average line with a min/max band and axes; its source is chosen
+  automatically from raw (up to 7 days), 5-minute rollups (up to 90 days) and
+  hourly rollups (up to a year). The Events card uses the same range and shows
+  the most recent 200 events. The chosen range is remembered on the device and
+  can be deep-linked with `?range=1y` (or `1h`, `24h`, `7d`, `30d`, `90d`).
+- **Active link** — interface, address, gateway, Wi-Fi signal, counters and
+  errors.
+- **Host** — CPU, memory, load and process count.
+- **Network health** — the latest probe per anchor and method.
+- **Throughput** — the latest result per anchor, including `networkQuality`.
+- **Processes and connections** — top CPU/memory consumers, network talkers and
+  recent active sockets.
 
 The page is plain HTML with inline CSS, JavaScript and SVG. There is no build
-step, no framework and no CDN. It binds to loopback only; exposing it to the
-LAN requires an explicit flag, a warning and a token.
+step, no framework and no CDN. It binds to loopback only; remote access is not
+implemented — use an SSH tunnel if you need it from another machine.
 
 The Cuisle mark is the dashboard's favicon and header logo: the server serves
 `/icon.svg`, `/favicon.ico` and `/apple-touch-icon.png` from
@@ -355,7 +399,7 @@ replace with hosts you trust.
 
 ```toml
 [general]
-data_dir = "~/Library/Application Support/cuisle"
+data_dir = "~/.local/share/cuisle"
 log_dir = "~/Library/Logs/cuisle"
 dashboard_host = "127.0.0.1"
 dashboard_port = 8787
@@ -469,17 +513,19 @@ reference an environment variable rather than writing the token into the file.
   about 90 MB of transfer; the default interval reflects that.
 - **Regional throughput depends on the anchors.** A CDN or Anycast URL answers
   from the nearest edge and defeats the geographic measurement. Upload needs a
-  writable endpoint. Third-party anchors change; `doctor --anchors` is the
-  check.
+  writable endpoint. Third-party anchors change; `doctor --anchors` checks
+  health and a throughput run checks the URL.
 - **Optional backends are external.** The Ookla CLI is third-party and sends
   test traffic to Ookla; its servers change. iperf3 needs a server you control.
-  Neither is installed automatically.
+  Neither is installed automatically. Their code paths and parsers are tested,
+  but neither tool was available on the capture machine for a live run.
 - **Backends are not comparable.** An HTTP transfer, an Ookla test and an
   iperf3 run measure different paths and methods. They are stored as separate
   series and never averaged together.
 - **Per-process bytes are sampled.** Sockets that open and close entirely
   between two samples can be missed. UDP has no connection state, so a "UDP
-  connection" means a bound or associated socket.
+  connection" means a bound or associated socket. The first sample of a
+  one-shot run records sockets at 0 bps; the second produces rates.
 - **VPNs and tunnels complicate attribution.** A `utun*` interface may carry
   the default route while the physical uplink is `en0`. Cuisle records both and
   labels the tunnel; it cannot see inside it.
@@ -487,22 +533,32 @@ reference an environment variable rather than writing the token into the file.
   and not a zero.
 - **No packet capture or content inspection.** This is deliberate.
 - **The dashboard has no authentication.** It is loopback-only by design.
+- **Charts show average, minimum and maximum; not p50/p95.** There is no zoom,
+  pan or tooltip yet, and each chart is a fixed ~300-bucket view.
+- **Rollups arrive hourly.** A freshly started daemon has raw data only until
+  its first maintenance pass, so 30/90-day and 1-year views can look sparse at
+  first.
+- **The CLI shows raw series, not percentile summaries.** `history` and the
+  dashboard chart the samples or rollups that exist; p50/p95 aggregation is not
+  implemented yet.
+- **Launchd installation was not exercised here.** Plist generation is tested;
+  installing the agent on this Mac was left to the user.
+- **No PyPI release.** Install is editable from the repository.
 
 ## Development
 
-The scaffold, tests and fixtures do not exist yet. Once they do:
+Run the tests and lint:
 
 ```sh
-.venv/bin/python -m pytest
+.venv/bin/python -m pytest        # 63 tests, offline
 .venv/bin/python -m ruff check .
 .venv/bin/cuisle doctor
 ```
 
-Tests are offline and deterministic. Parsers are tested against committed
-fixtures from real command output, with the command that regenerates each
-fixture recorded beside it. A test that needs a live interface, `ping`,
-`networkQuality`, `speedtest` or `iperf3` is an integration test and is not part
-of the default run.
+The suite uses sanitised command fixtures and a fake runner; the dashboard and
+HTTP-backend tests use loopback only. A test that needs a live interface,
+`ping`, `networkQuality`, `speedtest` or `iperf3` is an integration test and is
+not part of the default run.
 
 ### Icon
 
@@ -530,14 +586,19 @@ The layout and the rules for adding a metric are in
 
 - [x] Design documents
 - [x] Icon, PNG sizes and favicon
-- [ ] Package scaffold, configuration, SQLite schema and migrations
-- [ ] Process, connection and interface samplers
-- [ ] Health probes and anchor verification
-- [ ] Throughput tests with battery and data-cost guards
-- [ ] Rollups, retention and events
-- [ ] CLI, dashboard and HTML report
-- [ ] launchd service and `install.sh`
-- [ ] Optional Ookla Speedtest and iperf3 backends for regional throughput
+- [x] Package scaffold, configuration, SQLite schema and migrations
+- [x] Process, connection and interface samplers
+- [x] Health probes and anchor verification
+- [x] Throughput tests with battery and data-cost guards
+- [x] Rollups, retention and events
+- [x] CLI, dashboard and HTML report
+- [x] launchd service and `install.sh`
+- [x] Optional Ookla Speedtest and iperf3 backends for regional throughput
+- [x] Long-range, rollup-backed dashboard history and events
+- [ ] Live soak test and real regional anchor tuning
+- [ ] CoreWLAN/Location Services verification on a granted terminal
+- [ ] Percentile summaries for `health` and `history`
+- [ ] Publish to PyPI
 
 ## License
 
@@ -545,7 +606,9 @@ MIT — see [`LICENSE`](./LICENSE).
 
 ## AI contributions
 
-This README and `AGENTS.md` were written by Claude Code (DeepSeek Flash,
-effort: high) on 2026-11-15. The session reported `CLAUDE_EFFORT=high`. The
-Cuisle icon (`src/cuisle/icons/icon.svg`) and its rasterised derivatives were
-generated by the same assistant in the same session.
+This README, `AGENTS.md`, the implementation in `src/cuisle/`, the tests and
+fixtures, `pyproject.toml`, `install.sh` and `.gitignore` were written by
+Claude Code (DeepSeek Flash, effort: high) on 2026-11-15. The session reported
+`CLAUDE_EFFORT=high`. The Cuisle icon (`src/cuisle/icons/icon.svg`),
+`tools/make-icons.sh` and its rasterised derivatives were generated by the same
+assistant in the same session.

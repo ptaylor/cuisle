@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Cuisle runtime data (never commit a database or its WAL/SHM files)
+*.db
+*.db-wal
+*.db-shm
+*.log
+reports/
+
+# Local configuration
+*.env
+.env.*
+*.local.toml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editors
+.idea/
+*.swp

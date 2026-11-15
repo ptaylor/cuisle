@@ -1,0 +1,33 @@
+{
+  "base_rtt": 29.267499923706055,
+  "dl_bytes_transferred": 74611782,
+  "dl_responsiveness": 434.589111328125,
+  "dl_throughput": 80377312,
+  "end_date": "2026-11-15 20:21:07.400",
+  "interface_name": "en0",
+  "other": {
+    "ecn_values": {
+      "ecn_disabled": 284
+    },
+    "interface-type": {
+      "wifi": 284
+    },
+    "l4s_enablement": {
+      "disabled": 284
+    },
+    "protocols_seen": {
+      "h2": 284
+    },
+    "proxy_state": {
+      "not_proxied": 284
+    },
+    "rat": {
+      "unknown": 284
+    }
+  },
+  "start_date": "2026-11-15 20:20:52.228",
+  "test_endpoint": "iedub1-edge-bx-002.aaplimg.com",
+  "ul_bytes_transferred": 17367039,
+  "ul_responsiveness": 645.74273681640625,
+  "ul_throughput": 26294538
+}

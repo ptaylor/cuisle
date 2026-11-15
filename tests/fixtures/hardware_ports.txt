@@ -1,0 +1,27 @@
+
+Hardware Port: Thunderbolt Bridge
+Device: bridge0
+Ethernet Address: aa:bb:cc:dd:ee:ff
+
+Hardware Port: Wi-Fi
+Device: en0
+Ethernet Address: aa:bb:cc:dd:ee:ff
+
+Hardware Port: Thunderbolt 1
+Device: en1
+Ethernet Address: aa:bb:cc:dd:ee:ff
+
+Hardware Port: Thunderbolt 2
+Device: en2
+Ethernet Address: aa:bb:cc:dd:ee:ff
+
+Hardware Port: Thunderbolt 3
+Device: en3
+Ethernet Address: aa:bb:cc:dd:ee:ff
+
+Hardware Port: Thunderbolt 4
+Device: en4
+Ethernet Address: aa:bb:cc:dd:ee:ff
+
+VLAN Configurations
+===================

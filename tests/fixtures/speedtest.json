@@ -1,0 +1,32 @@
+{
+  "type": "result",
+  "timestamp": "2026-11-15T20:00:00Z",
+  "ping": {
+    "jitter": 1.2,
+    "latency": 18.4
+  },
+  "download": {
+    "bandwidth": 62500000,
+    "bytes": 75000000,
+    "elapsed": 12000
+  },
+  "upload": {
+    "bandwidth": 6000000,
+    "bytes": 18000000,
+    "elapsed": 15000
+  },
+  "server": {
+    "id": 12345,
+    "name": "Example Server",
+    "location": "Dublin",
+    "country": "Ireland",
+    "host": "speed.example.net:8080",
+    "url": "http://speed.example.net:8080/speedtest/upload.php"
+  },
+  "interface": {
+    "internalIp": "192.168.100.20",
+    "name": "en0",
+    "isVpn": false,
+    "externalIp": "203.0.113.10"
+  }
+}

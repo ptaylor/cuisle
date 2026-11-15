@@ -1,0 +1,21 @@
+
+; <<>> DiG 9.10.6 <<>> +time=2 +tries=1 www.heanet.ie
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 54847
+;; flags: qr rd ra; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 512
+;; QUESTION SECTION:
+;www.heanet.ie.			IN	A
+
+;; ANSWER SECTION:
+www.heanet.ie.		300	IN	CNAME	heanet.ie.webhosting3.heanet.ie.
+heanet.ie.webhosting3.heanet.ie. 42752 IN A	203.0.113.111
+
+;; Query time: 32 msec
+;; SERVER: 192.168.100.1#53(192.168.100.1)
+;; WHEN: Sun Nov 15 20:50:27 GMT 2026
+;; MSG SIZE  rcvd: 94
+

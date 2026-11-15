@@ -1,0 +1,25 @@
+Name       Mtu   Network       Address            Ipkts Ierrs     Ibytes    Opkts Oerrs     Obytes  Coll
+lo0        16384 <Link#1>                           971     0     159325      971     0     159325     0
+lo0        16384 127           localhost            971     -     159325      971     -     159325     -
+lo0        16384 localhost   ::1                    971     -     159325      971     -     159325     -
+lo0        16384 example.loc fe80::000              971     -     159325      971     -     159325     -
+gif0*      1280  <Link#2>                             0     0          0        0     0          0     0
+stf0*      1280  <Link#3>                             0     0          0        0     0          0     0
+en9        16000 <Link#4>    aa:bb:cc:dd:ee:ff    79388     0    6103546    38092     0    7168888     0
+en9        16000 fe80::00000 fe80::00000000000    79388     -    6103546    38092     -    7168888     -
+ap1        1500  <Link#5>    aa:bb:cc:dd:ee:ff        0     0          0       72     0      18183     0
+ap1        1500  example.loc fe80::00000000000        0     -          0       72     -      18183     -
+en0        1500  <Link#6>    aa:bb:cc:dd:ee:ff   603136     0  591509640   428791     0  237693630     0
+en0        1500  example.loc fe80::00000000000   603136     -  591509640   428791     -  237693630     -
+en0        1500  192.168.192   192.168.100.20    603136     -  591509640   428791     -  237693630     -
+awdl0      1500  <Link#7>    aa:bb:cc:dd:ee:ff        0     0          0       24     0       2772     0
+awdl0      1500  fe80::00000 fe80::00000000000        0     -          0       24     -       2772     -
+llw0       1500  <Link#8>    aa:bb:cc:dd:ee:ff        0     0          0        0     0          0     0
+llw0       1500  fe80::00000 fe80::00000000000        0     -          0        0     -          0     -
+en1        1500  <Link#9>    aa:bb:cc:dd:ee:ff        0     0          0        0     0          0     0
+en2        1500  <Link#10>   aa:bb:cc:dd:ee:ff        0     0          0        0     0          0     0
+en4        1500  <Link#11>   aa:bb:cc:dd:ee:ff        0     0          0        0     0          0     0
+en3        1500  <Link#12>   aa:bb:cc:dd:ee:ff        0     0          0        0     0          0     0
+bridge0    1500  <Link#13>   aa:bb:cc:dd:ee:ff        0     0          0        0     0          0     0
+utun0      1500  <Link#14>                            0     0          0        1     0         80     0
+utun0      1500  example.loc fe80::00000000000        0     -          0        1     -         80     -

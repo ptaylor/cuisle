@@ -13,44 +13,41 @@ except the probe anchors the user configures.
 
 ## Status
 
-**Design stage — no runtime code yet.** This file and `README.md` define the
-intended architecture, command surface and invariants. The first implementation
-milestone is a package scaffold with config, SQLite schema and tests; the
-samplers, probes, dashboard and launchd integration follow. Do not describe the
-tool as working until `pytest` passes and `cuisle doctor` runs on a real Mac.
+**Working MVP.** The package, daemon, samplers, probes, SQLite store, rollups,
+CLI, dashboard, report, icon pipeline and tests are implemented and run on
+macOS 15.7.9. `pytest` passes 63 tests and `ruff check .` is clean.
 
-Milestones, in order:
+Working and exercised on this Mac:
 
-1. Scaffold: package, config, SQLite schema/migrations, `doctor`, tests,
-   `install.sh`, `.gitignore`, `pyproject.toml`.
-2. Samplers: processes, sockets, interfaces (with optional Wi-Fi detail).
-3. Health probes: DNS/TCP/TLS/HTTP/ICMP per anchor and scope.
-4. Throughput: `networkQuality`, bounded regional HTTP transfers, and optional
-   Ookla Speedtest and iperf3 backends, with battery and data-cost guards.
-5. Storage: event log, rollups, retention and pruning.
-6. Interfaces: CLI, loopback dashboard and self-contained HTML report.
-7. Service: launchd install/uninstall/status, log paths and restart behaviour.
+- Process, socket, interface and host sampling without `sudo`.
+- DNS/TCP/TLS/HTTP/ICMP probes to the four default anchors.
+- The HTTP throughput backend (tested against a local server) and
+  `networkQuality` JSON parsing.
+- The daemon loop, the loopback dashboard, the HTML report and `install.sh`.
+- SQLite WAL storage, rollups, retention and the icon pipeline.
+- The dashboard range/series selector and `cuisle history` read raw, 5-minute
+  and hourly rollups for windows from 1 hour to 1 year; both were exercised
+  against live rollups.
 
-Known gaps to settle during implementation:
+Known gaps, stated so they are not mistaken for working features:
 
-- **Regional throughput needs anchors the user trusts.** No hard-coded
-  third-party URL is guaranteed to stay in its region. Health probes work with
-  any host; throughput needs a URL that supports a bounded or range read, or an
-  Ookla/iperf3 anchor. Upload needs a writable endpoint, an Ookla server or an
-  iperf3 server. An anchor that cannot be verified is reported as unavailable,
-  never silently trusted.
-- **Wi-Fi names are gated.** SSID/BSSID/signal need the optional PyObjC
-  CoreWLAN/CoreLocation extra, and names also need Location Services
-  authorisation for the host terminal app. Without them, Cuisle reports the
-  interface type and traffic but not Wi-Fi names.
-- **Full per-process visibility is unavailable without root.** Cuisle never
-  asks for `sudo`; metrics that need it are reported as unavailable, not
-  guessed or returned as zero.
+- CoreWLAN is optional and not installed here, so Wi-Fi names and signal are
+  unavailable until the `corewlan` extra and Location Services are enabled.
+- The Ookla Speedtest and iperf3 backends are implemented and parser-tested but
+  have not been run against the real tools on this machine: `speedtest` is the
+  broken Python shim and `iperf3` is not installed.
+- `cuisle service install` has been exercised up to plist generation; the
+  launchd bootstrap path has not been installed on this Mac.
+- The dashboard is a functional read-only single-page view, not a polished
+  charting application. It shows average plus min/max; p50/p95 and zoom/pan are
+  not implemented.
+- Rollups are written by the hourly maintenance pass, so a freshly started
+  daemon falls back to raw data for long windows until its first pass.
+- There is no PyPI release; installation is editable from the repository.
 
 ## Commands
 
-Planned entry points. The first commit that adds the scaffold must make these
-exact commands work.
+These work from the repository today.
 
 ```sh
 python3 -m venv .venv
@@ -58,21 +55,30 @@ python3 -m venv .venv
 .venv/bin/pip install -e ".[corewlan]"     # optional Wi-Fi details
 ./install.sh ~/bin                         # idempotent symlink
 
-.venv/bin/python -m pytest                 # no live network required
+.venv/bin/python -m pytest                 # 63 tests, no live network
 .venv/bin/python -m ruff check .
 ./tools/make-icons.sh                      # rebuild PNGs/favicon (ImageMagick)
+
 .venv/bin/cuisle doctor                    # tools, permissions, anchors, paths
 .venv/bin/cuisle daemon run                # foreground; the only daemon mode
-.venv/bin/cuisle service install           # launchd LaunchAgent
-.venv/bin/cuisle dashboard                 # http://127.0.0.1:8787
+.venv/bin/cuisle daemon run --once         # one light sample, no throughput
+.venv/bin/cuisle dashboard                 # opens http://127.0.0.1:8787
+.venv/bin/cuisle dashboard --no-open       # print the URL only (headless)
+.venv/bin/cuisle report --since 24h        # writes ./reports/*.html
+.venv/bin/cuisle history --metric cpu_pct --since 30d --resolution auto
 .venv/bin/cuisle status
+.venv/bin/cuisle health --now              # run probes without the daemon
+.venv/bin/cuisle speed --now               # runs networkQuality: ~90 MB
+.venv/bin/cuisle speed --now --no-networkquality  # regional HTTP/backend only
+.venv/bin/cuisle service install           # launchd LaunchAgent
 ```
 
 Rules for commands:
 
 - No command, install step or test may require `sudo`.
-- `pytest` must pass with no network access; live probes are exercised through
-  fixtures and a fake clock/runner.
+- `pytest` must pass with no external network access. Live probes are exercised
+  through fixtures and a fake runner; the loopback dashboard and local HTTP
+  backend tests are local-only.
 - `ruff check .` must pass with the default rule set (import sorting included),
   matching `../wifi` and `../bu`.
 - `./tools/make-icons.sh` is deterministic: it renders from the SVG, strips
@@ -80,20 +86,23 @@ Rules for commands:
   every generated file byte-identical.
 - `daemon run` stays in the foreground and logs to stderr; launchd is the only
   supported way to keep it running.
+- `daemon run --once` is deliberately light: it never starts a throughput test.
 - Every query and report command supports `--json`, with units in the key name
   (`latency_ms`, `down_bps`, `rssi_dbm`). Operational commands (`daemon`,
   `service`) print plain status and do not need JSON.
+- The dashboard and `history` must not mix probe methods in one series. Latency
+  and loss default to ICMP; pass `--method` to choose another.
 
 ## Layout
 
-The implementation does not exist yet; this is the intended layout.
+The implementation is in place; this is the current layout.
 
 | Path | What it is |
 | --- | --- |
-| `src/cuisle/cli.py` | Command definitions: `status`, `watch`, `processes`, `connections`, `health`, `speed`, `history`, `report`, `dashboard`, `service`, `doctor`, `config`, `paths`. |
-| `src/cuisle/config.py` | TOML loading, defaults, path resolution and environment overrides. |
+| `src/cuisle/cli.py` | Command definitions: `status`, `watch`, `processes`, `connections`, `health`, `speed`, `history`, `report`, `dashboard`, `daemon`, `service`, `doctor`, `config`, `paths`. |
+| `src/cuisle/config.py` | TOML loading, defaults, validation, path resolution and environment overrides. |
 | `src/cuisle/daemon.py` | Scheduler, signal handling, sleep/wake gap detection, sampler isolation. |
-| `src/cuisle/samplers/processes.py` | Host and per-process CPU, memory, threads and network deltas. |
+| `src/cuisle/samplers/processes.py` | Host and per-process CPU, memory, thread and network sampling. |
 | `src/cuisle/samplers/connections.py` | TCP/UDP sockets from `netstat`, PID-to-name mapping, per-socket deltas. |
 | `src/cuisle/samplers/interfaces.py` | Active route, addresses, Wi-Fi/Ethernet classification, link counters. |
 | `src/cuisle/samplers/health.py` | DNS/TCP/TLS/HTTP/ICMP probes per anchor and scope. |
@@ -101,15 +110,19 @@ The implementation does not exist yet; this is the intended layout.
 | `src/cuisle/backends.py` | HTTP, optional Ookla Speedtest and optional iperf3 throughput backends. |
 | `src/cuisle/probes.py` | Individual probe implementations and result types (no scheduling). |
 | `src/cuisle/networkquality.py` | `networkQuality -c` invocation and JSON parsing. |
-| `src/cuisle/db.py` | SQLite schema, migrations (`PRAGMA user_version`), queries, retention. |
+| `src/cuisle/db.py` | SQLite schema, writes, queries, the dashboard snapshot and rollup-aware `series_window`. |
 | `src/cuisle/rollup.py` | Raw to 5-minute/hourly aggregates and scheduled pruning. |
-| `src/cuisle/server.py` | Loopback HTTP server, JSON API, and `/icon.svg` / `/favicon.ico` / `/apple-touch-icon.png` routes. |
-| `src/cuisle/dashboard.html` | Single-file dashboard (inline CSS/JS/SVG); links the icon as favicon and header logo. |
+| `src/cuisle/server.py` | Loopback HTTP server, JSON API (including rollup-aware `/api/series`), and `/icon.svg` / `/favicon.ico` / `/apple-touch-icon.png` routes. |
+| `src/cuisle/dashboard.html` | Single-file dashboard (inline CSS/JS/SVG) with range/series selectors, a chart and the event list; links the icon as favicon and header logo. |
+| `src/cuisle/service.py` | launchd plist generation, install/uninstall/start/stop/status. |
+| `src/cuisle/util.py` | Duration parsing and human-readable byte/rate/time formatting. |
 | `src/cuisle/icons/icon.svg` | Single source of the Cuisle mark: a heartbeat pulse on a network ring. |
 | `src/cuisle/icons/*.png`, `favicon.ico` | Rasterised README/favicon/app sizes; generated by `tools/make-icons.sh` and committed. |
 | `src/cuisle/report.py` | Self-contained HTML report generated from the database. |
 | `src/cuisle/model.py` | Dataclasses shared by samplers, storage and renderers. |
-| `tests/` | pytest suite; `tests/fixtures/` holds real command output with regeneration commands. |
+| `tests/` | pytest suite (63 tests). |
+| `tests/fixtures/` | Sanitised command output and schema-only JSON fixtures, with regeneration commands. |
+| `.gitignore` | Python/runtime ignore rules; icons and fixtures stay tracked. |
 | `install.sh` | Symlinks the `cuisle` command into the target directory; warns when it is not on `PATH`. |
 | `tools/make-icons.sh` | Rasterises the icon SVG with ImageMagick; flat filled shapes only. |
 | `pyproject.toml` | Package metadata, dependencies, package data (`icons/*`), pytest and ruff config. |
@@ -138,7 +151,7 @@ The implementation does not exist yet; this is the intended layout.
 
 - **Role**: host CPU/memory, per-process CPU/RSS/threads/status/username, and
   interface addresses/statistics.
-- **Version**: `>=5.9` (7.1.3 observed); core dependency.
+- **Version**: `>=5.9` (7.2.2 in the dev venv); core dependency.
 - **Best Practices**:
   - `Process.cpu_percent()` needs repeated calls to be meaningful; keep one
     `Process` cache and compute deltas rather than a fresh blocking call per
@@ -321,14 +334,16 @@ The implementation does not exist yet; this is the intended layout.
 - **Role**: tests and linting.
 - **Version**: `pytest>=8.0`, `ruff>=0.6`; configured in `pyproject.toml`.
 - **Best Practices**:
-  - Tests are offline and deterministic: fake the clock and the command
-    runner; use committed fixtures for parsers.
+  - Tests use no external network: fake the clock and the command runner; use
+    committed fixtures for parsers. The dashboard and HTTP-backend tests use
+    loopback only.
   - Never assert on live network counts, timings or interface names; they vary
     legitimately.
   - Add a test for every parser and every rule that protects the database from
     unbounded growth.
-  - `ruff check .` must pass; match the sibling repos' default rule set (no
-    custom ignore list).
+  - `ruff check .` must pass. This ruff build's default select also includes
+    BLE, PYI, SIM and S; a deliberate broad catch carries a targeted
+    `# noqa: BLE001` with a reason, not a project-wide ignore.
 - **Docs**: https://docs.pytest.org/ · https://docs.astral.sh/ruff/
 
 ## macOS facts — do not relearn these the hard way
@@ -395,9 +410,9 @@ The implementation does not exist yet; this is the intended layout.
     answers from the nearest PoP: `www.gov.ie` resolves to CloudFront and
     `ftp.heanet.ie` to CloudFront, even though HEAnet is in Ireland.
     `www.heanet.ie` resolves to HEAnet's own `193.1.193.205` and is a usable
-    Irish health anchor. Third-party throughput URLs change;
-    `doctor --anchors` must resolve, connect and read a bounded number of
-    bytes before an anchor is trusted.
+    Irish health anchor. Third-party throughput URLs change; `doctor --anchors`
+    runs the health probes, and a throughput run (`cuisle speed --now`) is what
+    verifies the download URL or server ID before it is trusted.
 16. **Battery and data cost are part of correctness.** `pmset -g batt` gives
     the power source. Default to pausing throughput and `networkQuality` on
     battery and on interfaces macOS marks expensive. A monitor that drains
@@ -425,6 +440,38 @@ The implementation does not exist yet; this is the intended layout.
     the server (upload from the Mac); `-R` makes the server send (download);
     `--bidir` does both and reports two directions in one JSON document. Map
     the result to the correct label before storing it.
+22. **`netstat -ib` gives bytes and errors; `-i` gives packets.** Cuisle parses
+    `-ib` for `Ibytes`/`Obytes` and `Ierrs`/`Oerrs`. Do not store packet counts
+    in the byte columns.
+23. **`psutil.cpu_percent(interval=None)` returns 0 on its first call.** The
+    daemon primes host and per-process CPU before its first sample; without
+    priming, `daemon run --once` shows a screen of 0% CPU.
+24. **The first connection sample has no rates.** Socket counters are
+    cumulative, so the first sample records sockets at 0 bps; the second sample
+    produces the deltas. A one-shot `daemon run --once` correctly shows 0 bps
+    and is not a bug.
+25. **Read-only SQLite URIs need percent-encoding.** The default data directory
+    is `~/.local/share/cuisle` (no space), but a user can choose one that
+    contains spaces. Use `Path.resolve().as_uri() + "?mode=ro"`, not string
+    concatenation.
+26. **Never mix probe methods in one series.** The dashboard latency chart
+    filters to ICMP; `history --metric latency_ms` defaults to ICMP and
+    `--method` selects another. A DNS timing is not an HTTP time.
+27. **The dashboard's first `/api/status` may have no probes.** Health probes
+    run for several seconds at startup. The browser refreshes; do not treat the
+    empty first snapshot as a failure or cache it.
+28. **Long windows are read from rollups, never by limiting raw rows.** Raw is
+    kept 7 days, 5-minute rollups 90 days and hourly rollups 365 days.
+    `series_window` picks the source automatically, downsamples to the requested
+    bucket count and keeps each bucket's average, minimum, maximum and count.
+    A `LIMIT` on raw data for a long window silently shows only the newest
+    slice; never do that.
+29. **The dashboard range selector is global; the series selector is explicit.**
+    One range (`1h` … `1y`) drives both History and Events. The series choice
+    names the metric, scope, anchor and method/backend, so latency methods and
+    throughput backends are never mixed. Durations accept `s/m/h/d/w/y`; `1y`
+    is 365 days. The range is remembered in `localStorage` and can be
+    deep-linked as `?range=1y`.
 
 ## Project rules
 
@@ -461,10 +508,31 @@ The implementation does not exist yet; this is the intended layout.
 - **Time is explicit.** Store UTC epoch milliseconds; display in the system
   timezone; use monotonic time for schedules; record clock jumps and sleep gaps
   as events.
-- **Tests never touch the network.** Live probes are adapted through a runner
-  interface and tested with fixtures. A test that needs `ping`,
-  `networkQuality`, `speedtest`, `iperf3` or a real interface is an integration
-  test, excluded from the default run.
+- **Prime CPU before the first sample.** `psutil.cpu_percent(interval=None)` is
+  0 on its first call. `ProcessSampler.prime()` seeds host and per-process
+  counters; without it `daemon run --once` reports a screen of zeros.
+- **The first socket sample has no rates.** Socket counters are cumulative.
+  Record first-seen sockets at 0 bps and let the second sample produce deltas;
+  never invent a first rate.
+- **Probe series are per method.** `history` and the dashboard filter latency
+  and loss to one method; ICMP is the default. Do not average a DNS timing with
+  an HTTP time.
+- **Long-range series use rollups and downsampling.** Query `series_window` or
+  `/api/series`, never raw `LIMIT` for a long window. Preserve the min/max band
+  and sample count alongside the average. A missing rollup is a reason to fall
+  back to a coarser source, not to invent points.
+- **`daemon run --once` is light.** It takes one host/process/socket/interface
+  sample and one health pass. It never runs a throughput test.
+- **Read-only SQLite connections use `Path.as_uri()`.** The data directory
+  contains a space; string-built `file:` URIs fail or escape the path.
+- **Fixtures are sanitised.** Committed command output replaces local IPs, MAC
+  addresses, hostnames and resolver addresses, and records the regeneration
+  command. Never commit a real database, log or unsanitised capture.
+- **Tests never touch the external network.** Live probes are adapted through a
+  runner interface and tested with fixtures. The dashboard and HTTP-backend
+  tests use loopback only. A test that needs `ping`, `networkQuality`,
+  `speedtest`, `iperf3` or a real interface is an integration test, excluded
+  from the default run.
 - **Keep the docs and the schema in step.** A new metric means a model, a
   column, a migration, a parser test, an API field, a dashboard label and an
   entry here in the same commit.
@@ -530,7 +598,7 @@ Rules:
   tool needs at run time. If it is needed to run or to build, it is source and it
   belongs in git.
 
-For this project, the scaffold commit must add at least:
+For this project, the repository's `.gitignore` contains at least:
 
 ```gitignore
 # Python
@@ -655,9 +723,11 @@ misrepresents who wrote the work.
 
 `AGENTS.md` and `README.md` were written by Claude Code (DeepSeek Flash,
 effort: high) on 2026-11-15. The session reported `CLAUDE_EFFORT=high`. The
-Cuisle icon (`src/cuisle/icons/icon.svg`), `tools/make-icons.sh` and the
-rasterised derivatives were generated by the same assistant in the same
-session. Commits produced in this session use the trailer:
+implementation in `src/cuisle/`, the tests and fixtures in `tests/`,
+`pyproject.toml`, `install.sh` and `.gitignore` were written by the same
+assistant in the same session. The Cuisle icon (`src/cuisle/icons/icon.svg`),
+`tools/make-icons.sh` and the rasterised derivatives were also generated by it.
+Commits produced in this session use the trailer:
 
 ```
 Assisted-by: Claude Code (DeepSeek Flash, effort: high)
