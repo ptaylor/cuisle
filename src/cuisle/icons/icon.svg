@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Cuisle: a heartbeat pulse across a network">
+  <title>Cuisle</title>
+  <!-- Flat artwork on purpose: ImageMagick's MSVG renderer drops gradients,
+       transforms, dashes, filters and even stroked paths. Every shape here is
+       a filled rectangle, circle or polygon, so the PNG build is reliable.
+       Assisted-by: Claude Code (DeepSeek Flash, effort: high) -->
+  <rect width="512" height="512" rx="112" fill="#0B2230"/>
+
+  <!-- Pulse ring: a filled annulus, not a stroked circle. -->
+  <circle cx="256" cy="256" r="186" fill="#143B4A"/>
+  <circle cx="256" cy="256" r="166" fill="#0B2230"/>
+
+  <!-- Heartbeat: a thick band built from filled segments and round joints. -->
+  <polygon points="92.00,295.00 168.00,295.00 168.00,265.00 92.00,265.00" fill="#3BE3C4"/>
+  <polygon points="155.38,288.11 191.38,344.11 216.62,327.89 180.62,271.89" fill="#3BE3C4"/>
+  <polygon points="218.59,339.49 262.59,155.49 233.41,148.51 189.41,332.51" fill="#3BE3C4"/>
+  <polygon points="233.45,155.64 277.45,331.64 306.55,324.36 262.55,148.36" fill="#3BE3C4"/>
+  <polygon points="305.42,334.71 341.42,262.71 314.58,249.29 278.58,321.29" fill="#3BE3C4"/>
+  <polygon points="328.00,271.00 420.00,271.00 420.00,241.00 328.00,241.00" fill="#3BE3C4"/>
+  <circle cx="92" cy="280" r="15" fill="#3BE3C4"/>
+  <circle cx="168" cy="280" r="15" fill="#3BE3C4"/>
+  <circle cx="204" cy="336" r="15" fill="#3BE3C4"/>
+  <circle cx="248" cy="152" r="15" fill="#3BE3C4"/>
+  <circle cx="292" cy="328" r="15" fill="#3BE3C4"/>
+  <circle cx="328" cy="256" r="15" fill="#3BE3C4"/>
+  <circle cx="420" cy="256" r="15" fill="#3BE3C4"/>
+
+  <!-- The peak node: the pulse's one warm accent. -->
+  <circle cx="248" cy="152" r="24" fill="#FF7A6B"/>
+</svg>
